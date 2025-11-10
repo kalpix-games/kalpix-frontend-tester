@@ -1,0 +1,48 @@
+.login-page {
+	min-height: 100vh;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	padding: 20px;
+}
+
+.login-container {
+	background: white;
+	border-radius: 20px;
+	box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+	max-width: 600px;
+	width: 100%;
+	overflow: hidden;
+}
+
+.login-header {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	padding: 40px 30px;
+	text-align: center;
+}
+
+.login-header h1 {
+	margin: 0 0 10px 0;
+	font-size: 32px;
+	font-weight: bold;
+}
+
+.login-header p {
+	margin: 0;
+	font-size: 16px;
+	opacity: 0.9;
+}
+
+/* Override AuthTester styles for login page */
+.login-container .auth-tester {
+	box-shadow: none;
+	border-radius: 0;
+	margin: 0;
+}
+
+.login-container .auth-tester-header {
+	display: none;
+}
+

@@ -1,0 +1,72 @@
+.uno-game-page {
+	min-height: calc(100vh - 70px);
+	background: #1a1a2e;
+}
+
+.game-nav {
+	background: rgba(0, 0, 0, 0.3);
+	padding: 15px 20px;
+	display: flex;
+	gap: 15px;
+	align-items: center;
+	border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+}
+
+.back-btn,
+.home-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 10px 20px;
+	border: none;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.1);
+	color: white;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+.back-btn:hover,
+.home-btn:hover {
+	background: rgba(255, 255, 255, 0.2);
+	transform: translateY(-2px);
+}
+
+.back-icon,
+.home-icon {
+	font-size: 18px;
+}
+
+.back-text,
+.home-text {
+	font-size: 14px;
+}
+
+.game-wrapper {
+	/* The App.js component will handle its own styling */
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.game-nav {
+		padding: 10px 15px;
+	}
+
+	.back-text,
+	.home-text {
+		display: none;
+	}
+
+	.back-btn,
+	.home-btn {
+		padding: 10px 15px;
+	}
+
+	.back-icon,
+	.home-icon {
+		font-size: 24px;
+	}
+}
+

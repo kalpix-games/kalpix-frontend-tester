@@ -1,0 +1,398 @@
+.social-page {
+	min-height: calc(100vh - 70px);
+	background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+	padding: 30px 20px;
+}
+
+.social-container {
+	max-width: 800px;
+	margin: 0 auto;
+}
+
+/* Header */
+.social-header {
+	background: white;
+	padding: 40px;
+	border-radius: 20px;
+	box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+	margin-bottom: 30px;
+	text-align: center;
+}
+
+.social-header h1 {
+	margin: 0 0 10px 0;
+	font-size: 36px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	-webkit-background-clip: text;
+	-webkit-text-fill-color: transparent;
+	background-clip: text;
+}
+
+.social-header p {
+	margin: 0;
+	font-size: 18px;
+	color: #666;
+}
+
+/* Tabs */
+.social-tabs {
+	display: flex;
+	gap: 15px;
+	margin-bottom: 30px;
+	background: white;
+	padding: 15px;
+	border-radius: 16px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.tab-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 10px;
+	padding: 15px 20px;
+	border: none;
+	border-radius: 12px;
+	background: transparent;
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	color: #666;
+}
+
+.tab-btn:hover {
+	background: #f5f7fa;
+}
+
+.tab-btn.active {
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+}
+
+.tab-icon {
+	font-size: 24px;
+}
+
+.tab-text {
+	font-size: 16px;
+}
+
+/* Create Post Card */
+.create-post-card {
+	background: white;
+	padding: 25px;
+	border-radius: 16px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+	margin-bottom: 25px;
+}
+
+.create-post-card h3 {
+	margin: 0 0 15px 0;
+	font-size: 20px;
+	color: #333;
+}
+
+.post-input {
+	width: 100%;
+	padding: 15px;
+	border: 2px solid #e0e0e0;
+	border-radius: 12px;
+	font-size: 16px;
+	font-family: inherit;
+	resize: vertical;
+	margin-bottom: 15px;
+	transition: border-color 0.3s ease;
+}
+
+.post-input:focus {
+	outline: none;
+	border-color: #667eea;
+}
+
+.post-btn {
+	width: 100%;
+	padding: 15px;
+	border: none;
+	border-radius: 12px;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	color: white;
+	font-size: 16px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+.post-btn:hover:not(:disabled) {
+	transform: translateY(-2px);
+	box-shadow: 0 6px 15px rgba(102, 126, 234, 0.4);
+}
+
+.post-btn:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+/* Posts List */
+.posts-list {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.post-card {
+	background: white;
+	border-radius: 16px;
+	padding: 25px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+	transition: transform 0.3s ease;
+}
+
+.post-card:hover {
+	transform: translateY(-3px);
+}
+
+.post-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 15px;
+}
+
+.post-author {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+}
+
+.author-avatar {
+	width: 45px;
+	height: 45px;
+	border-radius: 50%;
+	background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 24px;
+}
+
+.author-info {
+	display: flex;
+	flex-direction: column;
+}
+
+.author-name {
+	font-size: 16px;
+	font-weight: 600;
+	color: #333;
+}
+
+.post-time {
+	font-size: 12px;
+	color: #999;
+}
+
+.post-content {
+	margin-bottom: 20px;
+}
+
+.post-content p {
+	margin: 0;
+	font-size: 16px;
+	line-height: 1.6;
+	color: #333;
+}
+
+.post-actions {
+	display: flex;
+	gap: 15px;
+	padding-top: 15px;
+	border-top: 1px solid #f0f0f0;
+}
+
+.action-btn {
+	flex: 1;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	padding: 10px;
+	border: none;
+	background: #f5f7fa;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	color: #666;
+}
+
+.action-btn:hover {
+	background: #e8ecf0;
+}
+
+.action-btn.liked {
+	background: #ffe0e0;
+	color: #e74c3c;
+}
+
+.action-icon {
+	font-size: 18px;
+}
+
+.action-text {
+	font-size: 14px;
+}
+
+/* News List */
+.news-list {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.news-card {
+	background: white;
+	border-radius: 16px;
+	padding: 25px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+	border-left: 5px solid #667eea;
+	transition: transform 0.3s ease;
+}
+
+.news-card:hover {
+	transform: translateY(-3px);
+}
+
+.news-card.tournament {
+	border-left-color: #f39c12;
+}
+
+.news-card.sale {
+	border-left-color: #e74c3c;
+}
+
+.news-card.announcement {
+	border-left-color: #667eea;
+}
+
+.news-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	margin-bottom: 15px;
+}
+
+.news-header h3 {
+	margin: 0;
+	font-size: 20px;
+	color: #333;
+	flex: 1;
+}
+
+.news-time {
+	font-size: 12px;
+	color: #999;
+	white-space: nowrap;
+	margin-left: 15px;
+}
+
+.news-content p {
+	margin: 0 0 20px 0;
+	font-size: 16px;
+	line-height: 1.6;
+	color: #666;
+}
+
+.news-footer {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding-top: 15px;
+	border-top: 1px solid #f0f0f0;
+}
+
+.news-like-btn {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 16px;
+	border: none;
+	background: #f5f7fa;
+	border-radius: 10px;
+	font-size: 14px;
+	font-weight: 500;
+	cursor: pointer;
+	transition: all 0.3s ease;
+	color: #666;
+}
+
+.news-like-btn:hover {
+	background: #e8ecf0;
+}
+
+.news-type-badge {
+	padding: 6px 12px;
+	border-radius: 20px;
+	font-size: 12px;
+	font-weight: 600;
+	text-transform: uppercase;
+	background: #f0f0f0;
+	color: #666;
+}
+
+/* Empty State */
+.empty-state {
+	background: white;
+	padding: 60px;
+	border-radius: 16px;
+	text-align: center;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+}
+
+.empty-state p {
+	margin: 0;
+	font-size: 16px;
+	color: #999;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+	.social-page {
+		padding: 20px 15px;
+	}
+
+	.social-header {
+		padding: 30px 20px;
+	}
+
+	.social-header h1 {
+		font-size: 28px;
+	}
+
+	.social-tabs {
+		padding: 10px;
+	}
+
+	.tab-btn {
+		padding: 12px 15px;
+	}
+
+	.tab-text {
+		display: none;
+	}
+
+	.tab-icon {
+		font-size: 28px;
+	}
+
+	.post-actions {
+		flex-direction: column;
+	}
+
+	.action-btn {
+		justify-content: flex-start;
+	}
+}
+
