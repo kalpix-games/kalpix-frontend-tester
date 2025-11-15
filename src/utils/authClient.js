@@ -197,12 +197,13 @@ export async function registerEmail(
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
 		}
-		if (!username || !email || !password) {
-			throw new Error("Username, email, and password are required");
+		// Email and password are required, username is optional
+		if (!email || !password) {
+			throw new Error("Email and password are required");
 		}
 
 		const payload = {
-			username,
+			username: username || "", // Send empty string if username not provided
 			email,
 			password,
 		};

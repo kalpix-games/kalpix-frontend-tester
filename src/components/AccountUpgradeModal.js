@@ -23,9 +23,9 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 	// Get current username from session (for pre-filling)
 	const currentUsername = session?.username || "";
 
-	// Email registration state - pre-fill username with current username
+	// Email registration state - start with empty username (user can keep current or change)
 	const [formData, setFormData] = useState({
-		username: currentUsername,
+		username: "",
 		email: "",
 		password: "",
 		otp: "",
@@ -108,12 +108,11 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// Use current username if field is empty or unchanged
-			const usernameToUse = formData.username || currentUsername;
-
+			// Send the username as-is (can be empty string)
+			// Backend will handle: empty -> use current username (account upgrade) or generate (new registration)
 			const result = await registerEmail(
 				client,
-				usernameToUse,
+				formData.username, // Can be empty string
 				formData.email,
 				formData.password,
 				session // Pass session for account upgrade
@@ -486,28 +485,35 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 							value={formData.username}
 							onChange={handleUsernameChange}
 							onBlur={handleCheckUsername}
-							placeholder={currentUsername || "cool-username"}
+							placeholder={
+								currentUsername
+									? `Leave empty to keep: ${currentUsername}`
+									: "Leave empty for auto-generated username"
+							}
 							className="form-input"
 						/>
-						{!usernameChanged && currentUsername && (
+						{!formData.username && currentUsername && (
 							<small
 								style={{
-									color: "#666",
+									color: "#4caf50",
 									fontSize: "12px",
 									marginTop: "4px",
 									display: "block",
 								}}
 							>
-								💡 Your current username will be kept if you leave this empty
+								✅ Will keep your current username:{" "}
+								<strong>{currentUsername}</strong>
 							</small>
 						)}
-						{usernameChanged && usernameAvailable !== null && (
-							<small
-								className={usernameAvailable ? "text-success" : "text-error"}
-							>
-								{usernameAvailable ? "✅ Available" : "❌ Taken"}
-							</small>
-						)}
+						{formData.username &&
+							formData.username !== currentUsername &&
+							usernameAvailable !== null && (
+								<small
+									className={usernameAvailable ? "text-success" : "text-error"}
+								>
+									{usernameAvailable ? "✅ Available" : "❌ Taken"}
+								</small>
+							)}
 					</div>
 
 					<div className="form-group">
