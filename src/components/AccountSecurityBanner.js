@@ -9,7 +9,7 @@ import "./AccountSecurityBanner.css";
  * Shows banners for unverified email users and guest users
  * Periodically checks verification status and displays account linking notifications
  */
-function AccountSecurityBanner({ client, session, onSessionUpdate }) {
+function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 	const [profile, setProfile] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [dismissed, setDismissed] = useState(false);
@@ -211,6 +211,8 @@ function AccountSecurityBanner({ client, session, onSessionUpdate }) {
 				{showUpgradeModal && (
 					<AccountUpgradeModal
 						client={client}
+						session={session}
+						socket={socket}
 						onClose={() => setShowUpgradeModal(false)}
 						onUpgraded={handleUpgraded}
 					/>

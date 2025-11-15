@@ -183,9 +183,16 @@ export async function checkUsernameAvailable(client, username) {
  * @param {string} username - Username
  * @param {string} email - Email
  * @param {string} password - Password
+ * @param {object} session - Optional session (for account upgrade)
  * @returns {object} Registration result
  */
-export async function registerEmail(client, username, email, password) {
+export async function registerEmail(
+	client,
+	username,
+	email,
+	password,
+	session = null
+) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
@@ -194,15 +201,31 @@ export async function registerEmail(client, username, email, password) {
 			throw new Error("Username, email, and password are required");
 		}
 
-		const response = await callUnauthenticatedRpc(
-			client,
-			"auth/register_email",
-			{
-				username,
-				email,
-				password,
-			}
-		);
+		const payload = {
+			username,
+			email,
+			password,
+		};
+
+		let response;
+		if (session) {
+			// Authenticated request (account upgrade)
+			console.log(
+				"🔄 Calling authenticated register_email RPC for account upgrade"
+			);
+			response = await client.rpc(session, "auth/register_email", payload);
+		} else {
+			// Unauthenticated request (new registration)
+			console.log(
+				"🆕 Calling unauthenticated register_email RPC for new registration"
+			);
+			response = await callUnauthenticatedRpc(
+				client,
+				"auth/register_email",
+				payload
+			);
+		}
+
 		const data = parseRpcResponse(response);
 		return data.data || data;
 	} catch (error) {
@@ -483,15 +506,43 @@ export async function verifyLoginOTP(client, email, otp) {
  * Login with Google OAuth
  * @param {object} client - Nakama client
  * @param {string} idToken - Google ID token
+ * @param {object} existingSession - Optional: existing session for account upgrade
  * @returns {object} Session and user data
  */
-export async function loginWithGoogle(client, idToken) {
-	// Use our custom RPC that generates themed usernames
-	// Note: This endpoint now uses Firebase Authentication for Google login
-	// The idToken should be a Firebase ID token (from Google Sign-In via Firebase)
-	const response = await callUnauthenticatedRpc(client, "auth/google_login", {
-		id_token: idToken,
-	});
+export async function loginWithGoogle(
+	client,
+	idToken,
+	existingSession = null,
+	socket = null
+) {
+	let response;
+
+	// Check if user is already logged in (account upgrade flow)
+	if (existingSession && existingSession.token && socket) {
+		console.log(
+			"🔄 User already logged in - upgrading account with Google login"
+		);
+		console.log("🔄 Existing UserID:", existingSession.user_id);
+		console.log("🔄 Existing Username:", existingSession.username);
+
+		// Call as authenticated RPC via socket - backend will extract userID from session token
+		// This triggers account upgrade flow (preserves username and all data)
+		// Note: socket.rpc() expects payload as JSON string
+		response = await socket.rpc(
+			"auth/google_login",
+			JSON.stringify({
+				id_token: idToken,
+			})
+		);
+	} else {
+		console.log("🆕 New user or not logged in - creating/logging in account");
+
+		// Call as unauthenticated RPC - backend will create new account or login
+		response = await callUnauthenticatedRpc(client, "auth/google_login", {
+			id_token: idToken,
+		});
+	}
+
 	const data = parseRpcResponse(response);
 
 	// The backend returns session data directly
@@ -511,6 +562,25 @@ export async function loginWithGoogle(client, idToken) {
 		expires_at:
 			sessionData.expiresAt || sessionData.expires_at || Date.now() + 3600000, // 1 hour default
 	};
+
+	// Log account upgrade success
+	if (
+		existingSession &&
+		existingSession.user_id === session.user_id &&
+		existingSession.username === session.username
+	) {
+		console.log("✅ Account upgraded successfully!");
+		console.log("✅ Username preserved:", session.username);
+		console.log("✅ UserID preserved:", session.user_id);
+	} else if (existingSession) {
+		console.warn(
+			"⚠️ Warning: UserID or username changed during upgrade - this should not happen!"
+		);
+		console.warn("Old UserID:", existingSession.user_id);
+		console.warn("New UserID:", session.user_id);
+		console.warn("Old Username:", existingSession.username);
+		console.warn("New Username:", session.username);
+	}
 
 	return {
 		session,

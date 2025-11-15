@@ -21,7 +21,13 @@ import {
  * Authentication Tester Component
  * Comprehensive UI for testing all authentication endpoints
  */
-function AuthTester({ client, session, setSession, onAuthSuccess }) {
+function AuthTester({
+	client,
+	session,
+	setSession,
+	onAuthSuccess,
+	socket = null,
+}) {
 	// Tab state
 	const [activeTab, setActiveTab] = useState("guest");
 
@@ -160,11 +166,18 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 			showStatus("error", "Client not initialized. Please refresh the page.");
 			return;
 		}
+
+		// Email and password are required, username is optional
+		if (!registerForm.email || !registerForm.password) {
+			showStatus("error", "Email and password are required");
+			return;
+		}
+
 		setLoading(true);
 		try {
 			const result = await registerEmail(
 				client,
-				registerForm.username,
+				registerForm.username, // Can be empty - backend will generate unique username
 				registerForm.email,
 				registerForm.password
 			);
@@ -364,9 +377,20 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 		}
 		setLoading(true);
 		try {
-			const result = await loginWithGoogle(client, idToken);
+			// Pass existing session and socket for account upgrade (if user is already logged in)
+			const result = await loginWithGoogle(client, idToken, session, socket);
+
+			// Check if this was an account upgrade
+			if (session && session.user_id === result.session.user_id) {
+				showStatus(
+					"success",
+					`✅ Account upgraded! Username preserved: ${result.session.username}`
+				);
+			} else {
+				showStatus("success", `Logged in as ${result.session.username}`);
+			}
+
 			setSession(result.session);
-			showStatus("success", `Logged in as ${result.session.username}`);
 			if (onAuthSuccess) onAuthSuccess(result.session);
 		} catch (error) {
 			console.error("Google login error:", error);
@@ -757,7 +781,18 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 						{registrationStep === "form" ? (
 							<div>
 								<div className="form-group">
-									<label>Username:</label>
+									<label>
+										Username:{" "}
+										<span
+											style={{
+												color: "#666",
+												fontWeight: "normal",
+												fontSize: "12px",
+											}}
+										>
+											(Optional - auto-generated if empty)
+										</span>
+									</label>
 									<input
 										type="text"
 										value={registerForm.username}
@@ -768,9 +803,9 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 											})
 										}
 										onBlur={handleCheckUsername}
-										placeholder="cool-username"
+										placeholder="Leave empty for auto-generated username"
 									/>
-									{usernameAvailable !== null && (
+									{registerForm.username && usernameAvailable !== null && (
 										<small
 											className={
 												usernameAvailable ? "text-success" : "text-error"
@@ -781,7 +816,9 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 									)}
 								</div>
 								<div className="form-group">
-									<label>Email:</label>
+									<label>
+										Email: <span style={{ color: "#f44336" }}>*</span>
+									</label>
 									<input
 										type="email"
 										value={registerForm.email}
@@ -792,10 +829,13 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 											})
 										}
 										placeholder="your@email.com"
+										required
 									/>
 								</div>
 								<div className="form-group">
-									<label>Password:</label>
+									<label>
+										Password: <span style={{ color: "#f44336" }}>*</span>
+									</label>
 									<input
 										type="password"
 										value={registerForm.password}
@@ -806,6 +846,7 @@ function AuthTester({ client, session, setSession, onAuthSuccess }) {
 											})
 										}
 										placeholder="Min 8 chars, 1 letter, 1 number"
+										required
 									/>
 								</div>
 								<button

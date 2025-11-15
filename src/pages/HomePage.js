@@ -83,6 +83,7 @@ function HomePage({ client, session, setSession, socket, isConnected }) {
 				<AccountSecurityBanner
 					client={client}
 					session={session}
+					socket={socket}
 					onSessionUpdate={handleSessionUpdate}
 				/>
 

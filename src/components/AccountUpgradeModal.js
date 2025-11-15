@@ -13,16 +13,19 @@ import "./AccountUpgradeModal.css";
  * Account Upgrade Modal Component
  * Allows guest users to upgrade their account via Google or Email
  */
-function AccountUpgradeModal({ client, onClose, onUpgraded }) {
+function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 	const [method, setMethod] = useState(null); // null | 'google' | 'email'
 	const [step, setStep] = useState("form"); // 'form' | 'otp'
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 
-	// Email registration state
+	// Get current username from session (for pre-filling)
+	const currentUsername = session?.username || "";
+
+	// Email registration state - pre-fill username with current username
 	const [formData, setFormData] = useState({
-		username: "",
+		username: currentUsername,
 		email: "",
 		password: "",
 		otp: "",
@@ -30,6 +33,7 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 	const [usernameAvailable, setUsernameAvailable] = useState(null);
 	const [remainingAttempts, setRemainingAttempts] = useState(null);
 	const [resendCooldown, setResendCooldown] = useState(0);
+	const [usernameChanged, setUsernameChanged] = useState(false); // Track if user changed username
 
 	// Helper functions
 	const extractRemainingAttempts = (errorMessage) => {
@@ -57,7 +61,12 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 
 	// Check username availability
 	const handleCheckUsername = async () => {
-		if (!formData.username) return;
+		// If username is empty or unchanged from current username, skip validation
+		if (!formData.username || formData.username === currentUsername) {
+			setUsernameAvailable(null);
+			setError("");
+			return;
+		}
 
 		try {
 			const result = await checkUsernameAvailable(client, formData.username);
@@ -72,14 +81,25 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 		}
 	};
 
+	// Handle username change
+	const handleUsernameChange = (e) => {
+		const newUsername = e.target.value;
+		setFormData({ ...formData, username: newUsername });
+		setUsernameChanged(newUsername !== currentUsername);
+		// Reset availability check when user types
+		setUsernameAvailable(null);
+	};
+
 	// Handle email registration
 	const handleRegisterEmail = async () => {
-		if (!formData.username || !formData.email || !formData.password) {
-			setError("Please fill in all fields");
+		// Email and password are required
+		if (!formData.email || !formData.password) {
+			setError("Please fill in email and password");
 			return;
 		}
 
-		if (!usernameAvailable) {
+		// If username was changed, it must be available
+		if (usernameChanged && formData.username && !usernameAvailable) {
 			setError("Please choose an available username");
 			return;
 		}
@@ -88,11 +108,15 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 		setError("");
 
 		try {
+			// Use current username if field is empty or unchanged
+			const usernameToUse = formData.username || currentUsername;
+
 			const result = await registerEmail(
 				client,
-				formData.username,
+				usernameToUse,
 				formData.email,
-				formData.password
+				formData.password,
+				session // Pass session for account upgrade
 			);
 			setStep("otp");
 			setSuccess(result.message || "OTP sent to your email!");
@@ -228,8 +252,18 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 		try {
 			// Import loginWithGoogle dynamically to avoid circular dependency
 			const { loginWithGoogle } = await import("../utils/authClient");
-			const result = await loginWithGoogle(client, idToken);
-			setSuccess("Account upgraded with Google!");
+			// Pass existing session and socket for account upgrade
+			const result = await loginWithGoogle(client, idToken, session, socket);
+
+			// Verify username was preserved
+			if (session && session.username === result.session.username) {
+				setSuccess(
+					`✅ Account upgraded! Username preserved: ${result.session.username}`
+				);
+			} else {
+				setSuccess("Account upgraded with Google!");
+			}
+
 			setTimeout(() => {
 				if (onUpgraded) {
 					onUpgraded(result.session);
@@ -441,18 +475,33 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 					{success && <div className="alert alert-success">{success}</div>}
 
 					<div className="form-group">
-						<label>Username:</label>
+						<label>
+							Username:{" "}
+							<span style={{ color: "#666", fontWeight: "normal" }}>
+								(Optional)
+							</span>
+						</label>
 						<input
 							type="text"
 							value={formData.username}
-							onChange={(e) =>
-								setFormData({ ...formData, username: e.target.value })
-							}
+							onChange={handleUsernameChange}
 							onBlur={handleCheckUsername}
-							placeholder="cool-username"
+							placeholder={currentUsername || "cool-username"}
 							className="form-input"
 						/>
-						{usernameAvailable !== null && (
+						{!usernameChanged && currentUsername && (
+							<small
+								style={{
+									color: "#666",
+									fontSize: "12px",
+									marginTop: "4px",
+									display: "block",
+								}}
+							>
+								💡 Your current username will be kept if you leave this empty
+							</small>
+						)}
+						{usernameChanged && usernameAvailable !== null && (
 							<small
 								className={usernameAvailable ? "text-success" : "text-error"}
 							>
@@ -462,7 +511,9 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 					</div>
 
 					<div className="form-group">
-						<label>Email:</label>
+						<label>
+							Email: <span style={{ color: "#f44336" }}>*</span>
+						</label>
 						<input
 							type="email"
 							value={formData.email}
@@ -471,11 +522,14 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 							}
 							placeholder="your@email.com"
 							className="form-input"
+							required
 						/>
 					</div>
 
 					<div className="form-group">
-						<label>Password:</label>
+						<label>
+							Password: <span style={{ color: "#f44336" }}>*</span>
+						</label>
 						<input
 							type="password"
 							value={formData.password}
@@ -484,13 +538,17 @@ function AccountUpgradeModal({ client, onClose, onUpgraded }) {
 							}
 							placeholder="Min 8 chars, 1 letter, 1 number"
 							className="form-input"
+							required
 						/>
 					</div>
 
 					<div className="modal-actions">
 						<button
 							onClick={handleRegisterEmail}
-							disabled={loading || !usernameAvailable}
+							disabled={
+								loading ||
+								(usernameChanged && formData.username && !usernameAvailable)
+							}
 							className="btn-primary"
 						>
 							{loading ? "Sending..." : "📧 Send OTP"}
