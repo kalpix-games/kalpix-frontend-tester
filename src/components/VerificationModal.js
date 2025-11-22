@@ -85,6 +85,19 @@ function VerificationModal({ client, email, onClose, onVerified }) {
 				setTimeout(() => {
 					onClose();
 				}, 3000);
+			} else if (
+				errorMessage.includes("already been verified by another account")
+			) {
+				// Email was claimed by the real owner (fraudster scenario)
+				setError(
+					"⚠️ This email has been verified by its owner. Your pending verification has been cancelled. Please register with a different email address."
+				);
+				// Auto-close after 5 seconds
+				setTimeout(() => {
+					onClose();
+					// Optionally reload the page to refresh the banner
+					window.location.reload();
+				}, 5000);
 			} else if (errorMessage.includes("Maximum OTP attempts exceeded")) {
 				setError(
 					"Too many incorrect attempts. Please request a new OTP by clicking 'Resend OTP'."
@@ -95,7 +108,9 @@ function VerificationModal({ client, email, onClose, onVerified }) {
 					"This OTP has expired. Please click 'Resend OTP' to get a new code."
 				);
 			} else if (errorMessage.includes("No verification pending")) {
-				setError("No verification pending for this email.");
+				setError(
+					"⚠️ No verification pending for this email. It may have been verified by another user or expired."
+				);
 			} else {
 				setError(errorMessage);
 			}

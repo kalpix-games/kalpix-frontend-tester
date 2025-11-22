@@ -179,6 +179,19 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 				setRemainingAttempts(attempts);
 			}
 
+			// Handle email claimed by another user
+			if (errorMessage.includes("already been verified by another account")) {
+				setError(
+					"⚠️ This email has been verified by its owner. Please use a different email address."
+				);
+				// Reset to form after 3 seconds
+				setTimeout(() => {
+					setStep("form");
+					setFormData({ ...formData, email: "", otp: "" });
+				}, 3000);
+				return;
+			}
+
 			if (errorMessage.includes("Maximum OTP attempts exceeded")) {
 				setError(
 					"Too many incorrect attempts. Please request a new OTP by clicking 'Resend OTP'."

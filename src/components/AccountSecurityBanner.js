@@ -133,6 +133,9 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 	}
 
 	// Banner for unverified email users
+	// IMPORTANT: Only show "Verify" banner if accountType is "email"
+	// If accountType is "guest" but email exists in metadata, it means the email was
+	// claimed by another user (fraudster scenario) - show "Register" banner instead
 	if (!isSecure && !isVerified && accountType === "email") {
 		return (
 			<>
@@ -177,6 +180,13 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 	}
 
 	// Banner for guest users
+	// Check if this was a fraudster account (had email in metadata but account type is guest)
+	// This happens when the real email owner verified and this account was cleaned up
+	const hadEmailRemoved =
+		accountType === "guest" &&
+		profile.metadata &&
+		profile.metadata.email === null;
+
 	if (!isSecure && !isVerified && accountType === "guest") {
 		return (
 			<>
@@ -187,8 +197,9 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 						<div className="banner-text">
 							<h3>Register to Secure Your Account</h3>
 							<p>
-								You're using a guest account. Register with email or Google to
-								save your progress and prevent data loss.
+								{hadEmailRemoved
+									? "The email you tried to register was verified by its owner. Please register with a different email or Google to save your progress."
+									: "You're using a guest account. Register with email or Google to save your progress and prevent data loss."}
 							</p>
 						</div>
 						<div className="banner-actions">
