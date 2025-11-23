@@ -450,6 +450,70 @@ export async function sendLoginOTP(client, email, password) {
 }
 
 /**
+ * Request password reset OTP
+ * @param {object} client - Nakama client
+ * @param {string} email - Email address
+ * @returns {object} Response data
+ */
+export async function forgotPassword(client, email) {
+	try {
+		if (!client) {
+			throw new Error("Nakama client is not initialized");
+		}
+		if (!email) {
+			throw new Error("Email is required");
+		}
+
+		const response = await callUnauthenticatedRpc(
+			client,
+			"auth/forgot_password",
+			{
+				email,
+			}
+		);
+		const data = parseRpcResponse(response);
+		return data.data || data;
+	} catch (error) {
+		console.error("Forgot password failed:", error);
+		throw new Error(error.message || "Failed to send password reset code");
+	}
+}
+
+/**
+ * Reset password with OTP
+ * @param {object} client - Nakama client
+ * @param {string} email - Email address
+ * @param {string} otp - OTP code
+ * @param {string} newPassword - New password
+ * @returns {object} Response data
+ */
+export async function resetPassword(client, email, otp, newPassword) {
+	try {
+		if (!client) {
+			throw new Error("Nakama client is not initialized");
+		}
+		if (!email || !otp || !newPassword) {
+			throw new Error("Email, OTP, and new password are required");
+		}
+
+		const response = await callUnauthenticatedRpc(
+			client,
+			"auth/reset_password",
+			{
+				email,
+				otp,
+				newPassword,
+			}
+		);
+		const data = parseRpcResponse(response);
+		return data.data || data;
+	} catch (error) {
+		console.error("Reset password failed:", error);
+		throw new Error(error.message || "Failed to reset password");
+	}
+}
+
+/**
  * Verify login OTP (legacy - for OTP-based flows if needed)
  * @param {object} client - Nakama client
  * @param {string} email - Email
