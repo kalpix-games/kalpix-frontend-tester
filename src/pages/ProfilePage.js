@@ -1,0 +1,254 @@
+import React, { useState, useEffect } from "react";
+import { getUserProfile, updateUserProfile } from "../utils/authClient";
+import "./ProfilePage.css";
+
+/**
+ * Profile Page Component
+ * Displays and allows editing of user profile information
+ */
+function ProfilePage({ client, session }) {
+	const [profile, setProfile] = useState(null);
+	const [loading, setLoading] = useState(true);
+	const [editing, setEditing] = useState(false);
+	const [error, setError] = useState("");
+	const [success, setSuccess] = useState("");
+
+	// Form state
+	const [formData, setFormData] = useState({
+		displayName: "",
+		bio: "",
+		country: "",
+	});
+
+	// Load profile on mount
+	useEffect(() => {
+		loadProfile();
+	}, []);
+
+	const loadProfile = async () => {
+		setLoading(true);
+		setError("");
+		try {
+			const result = await getUserProfile(client, session);
+			setProfile(result);
+			setFormData({
+				displayName: result.displayName || "",
+				bio: result.bio || "",
+				country: result.country || "",
+			});
+		} catch (err) {
+			setError(err.message || "Failed to load profile");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleInputChange = (e) => {
+		const { name, value } = e.target;
+		setFormData((prev) => ({
+			...prev,
+			[name]: value,
+		}));
+	};
+
+	const handleSave = async () => {
+		setLoading(true);
+		setError("");
+		setSuccess("");
+		try {
+			await updateUserProfile(
+				client,
+				session,
+				formData.displayName,
+				formData.bio,
+				formData.country
+			);
+			setSuccess("Profile updated successfully!");
+			setEditing(false);
+			await loadProfile();
+		} catch (err) {
+			setError(err.message || "Failed to update profile");
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const handleCancel = () => {
+		setEditing(false);
+		setFormData({
+			displayName: profile.displayName || "",
+			bio: profile.bio || "",
+			country: profile.country || "",
+		});
+		setError("");
+		setSuccess("");
+	};
+
+	const formatDate = (timestamp) => {
+		if (!timestamp) return "N/A";
+		const date = new Date(timestamp * 1000);
+		return date.toLocaleDateString("en-US", {
+			year: "numeric",
+			month: "long",
+			day: "numeric",
+		});
+	};
+
+	if (loading && !profile) {
+		return (
+			<div className="profile-page">
+				<div className="profile-container">
+					<div className="loading">Loading profile...</div>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<div className="profile-page">
+			<div className="profile-container">
+				<div className="profile-header">
+					<h1>👤 My Profile</h1>
+				</div>
+
+				{error && <div className="error-message">{error}</div>}
+				{success && <div className="success-message">{success}</div>}
+
+				{profile && (
+					<div className="profile-content">
+						{/* Profile Avatar */}
+						<div className="profile-avatar-section">
+							<img
+								src={profile.avatarUrl || "/default-avatar.png"}
+								alt="Profile"
+								className="profile-avatar"
+							/>
+						</div>
+
+						{/* Profile Information */}
+						<div className="profile-info-section">
+							<div className="info-row">
+								<label>Username:</label>
+								<span className="info-value">{profile.username}</span>
+							</div>
+
+							<div className="info-row">
+								<label>Display Name:</label>
+								{editing ? (
+									<input
+										type="text"
+										name="displayName"
+										value={formData.displayName}
+										onChange={handleInputChange}
+										className="edit-input"
+										placeholder="Enter display name"
+									/>
+								) : (
+									<span className="info-value">
+										{profile.displayName || "Not set"}
+									</span>
+								)}
+							</div>
+							<div className="info-row">
+								<label>Bio:</label>
+								{editing ? (
+									<textarea
+										name="bio"
+										value={formData.bio}
+										onChange={handleInputChange}
+										className="edit-textarea"
+										placeholder="Tell us about yourself"
+										rows="3"
+									/>
+								) : (
+									<span className="info-value">{profile.bio || "Not set"}</span>
+								)}
+							</div>
+
+							<div className="info-row">
+								<label>Country:</label>
+								{editing ? (
+									<input
+										type="text"
+										name="country"
+										value={formData.country}
+										onChange={handleInputChange}
+										className="edit-input"
+										placeholder="Country code (e.g., US)"
+										maxLength="2"
+									/>
+								) : (
+									<span className="info-value">
+										{profile.country || "Not set"}
+									</span>
+								)}
+							</div>
+
+							<div className="info-row">
+								<label>Date of Joining:</label>
+								<span className="info-value">
+									{formatDate(profile.dateOfJoining)}
+								</span>
+							</div>
+
+							<div className="info-row">
+								<label>Account Type:</label>
+								<span className="info-value account-type">
+									{profile.accountType}
+									{profile.isSecure && (
+										<span className="badge secure">✓ Secure</span>
+									)}
+									{profile.isVerified && (
+										<span className="badge verified">✓ Verified</span>
+									)}
+								</span>
+							</div>
+
+							<div className="info-row">
+								<label>Status:</label>
+								<span className="info-value">
+									{profile.isOnline ? (
+										<span className="status online">🟢 Online</span>
+									) : (
+										<span className="status offline">⚫ Offline</span>
+									)}
+								</span>
+							</div>
+						</div>
+
+						{/* Action Buttons */}
+						<div className="profile-actions">
+							{editing ? (
+								<>
+									<button
+										onClick={handleSave}
+										disabled={loading}
+										className="btn-primary"
+									>
+										{loading ? "Saving..." : "💾 Save Changes"}
+									</button>
+									<button
+										onClick={handleCancel}
+										disabled={loading}
+										className="btn-secondary"
+									>
+										❌ Cancel
+									</button>
+								</>
+							) : (
+								<button
+									onClick={() => setEditing(true)}
+									className="btn-primary"
+								>
+									✏️ Edit Profile
+								</button>
+							)}
+						</div>
+					</div>
+				)}
+			</div>
+		</div>
+	);
+}
+
+export default ProfilePage;

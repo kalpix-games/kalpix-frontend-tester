@@ -90,6 +90,13 @@
 	background: rgba(255, 255, 255, 0.2);
 	border-radius: 20px;
 	color: white;
+	cursor: pointer;
+	transition: all 0.3s ease;
+}
+
+.user-info:hover {
+	background: rgba(255, 255, 255, 0.3);
+	transform: translateY(-2px);
 }
 
 .user-icon {

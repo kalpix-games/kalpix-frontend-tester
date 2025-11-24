@@ -14,6 +14,7 @@ import HomePage from "./pages/HomePage";
 import SocialPage from "./pages/SocialPage";
 import GamesPage from "./pages/GamesPage";
 import UNOGamePage from "./pages/UNOGamePage";
+import ProfilePage from "./pages/ProfilePage";
 
 // Components
 import Navigation from "./components/Navigation";
@@ -220,6 +221,16 @@ function MainApp() {
 									socket={socket}
 									isConnected={isConnected}
 								/>
+							</ProtectedRoute>
+						}
+					/>
+
+					{/* Profile Page */}
+					<Route
+						path="/profile"
+						element={
+							<ProtectedRoute>
+								<ProfilePage client={client} session={session} />
 							</ProtectedRoute>
 						}
 					/>

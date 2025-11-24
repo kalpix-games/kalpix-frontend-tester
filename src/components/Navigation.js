@@ -1,5 +1,5 @@
 import React from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useNavigate } from "react-router-dom";
 import "./Navigation.css";
 
 /**
@@ -7,6 +7,8 @@ import "./Navigation.css";
  * Top navigation bar for the application
  */
 function Navigation({ session, onLogout }) {
+	const navigate = useNavigate();
+
 	return (
 		<nav className="navigation">
 			<div className="nav-container">
@@ -51,7 +53,7 @@ function Navigation({ session, onLogout }) {
 
 				{/* User Info */}
 				<div className="nav-user">
-					<div className="user-info">
+					<div className="user-info" onClick={() => navigate("/profile")}>
 						<span className="user-icon">👤</span>
 						<span className="user-name">{session?.username || "User"}</span>
 					</div>
@@ -65,4 +67,3 @@ function Navigation({ session, onLogout }) {
 }
 
 export default Navigation;
-
