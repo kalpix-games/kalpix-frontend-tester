@@ -1,5 +1,6 @@
 import React from "react";
 import { NavLink, useNavigate } from "react-router-dom";
+import { useNotifications } from "../contexts/NotificationContext";
 import "./Navigation.css";
 
 /**
@@ -8,6 +9,7 @@ import "./Navigation.css";
  */
 function Navigation({ session, onLogout }) {
 	const navigate = useNavigate();
+	const { followRequestCount } = useNotifications();
 
 	return (
 		<nav className="navigation">
@@ -48,6 +50,19 @@ function Navigation({ session, onLogout }) {
 					>
 						<span className="nav-icon">📱</span>
 						<span className="nav-text">Social</span>
+					</NavLink>
+
+					<NavLink
+						to="/follow"
+						className={({ isActive }) =>
+							isActive ? "nav-link active" : "nav-link"
+						}
+					>
+						<span className="nav-icon">👥</span>
+						<span className="nav-text">Follow</span>
+						{followRequestCount > 0 && (
+							<span className="notification-badge">{followRequestCount}</span>
+						)}
 					</NavLink>
 				</div>
 

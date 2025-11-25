@@ -15,9 +15,12 @@ import SocialPage from "./pages/SocialPage";
 import GamesPage from "./pages/GamesPage";
 import UNOGamePage from "./pages/UNOGamePage";
 import ProfilePage from "./pages/ProfilePage";
+import FollowSystemPage from "./pages/FollowSystemPage";
+import UserProfilePage from "./pages/UserProfilePage";
 
 // Components
 import Navigation from "./components/Navigation";
+import { NotificationProvider } from "./contexts/NotificationContext";
 
 /**
  * Main Application Component
@@ -141,125 +144,147 @@ function MainApp() {
 
 	return (
 		<Router>
-			<div className="app-container">
-				{/* Navigation - only show when logged in */}
-				{session && <Navigation session={session} onLogout={handleLogout} />}
+			<NotificationProvider socket={socket}>
+				<div className="app-container">
+					{/* Navigation - only show when logged in */}
+					{session && <Navigation session={session} onLogout={handleLogout} />}
 
-				{/* Routes */}
-				<Routes>
-					{/* Login Page */}
-					<Route
-						path="/login"
-						element={
-							session ? (
-								<Navigate to="/home" replace />
-							) : (
-								<LoginPage
-									client={client}
-									session={session}
-									setSession={setSession}
-									onAuthSuccess={handleAuthSuccess}
-								/>
-							)
-						}
-					/>
+					{/* Routes */}
+					<Routes>
+						{/* Login Page */}
+						<Route
+							path="/login"
+							element={
+								session ? (
+									<Navigate to="/home" replace />
+								) : (
+									<LoginPage
+										client={client}
+										session={session}
+										setSession={setSession}
+										onAuthSuccess={handleAuthSuccess}
+									/>
+								)
+							}
+						/>
 
-					{/* Home Page */}
-					<Route
-						path="/home"
-						element={
-							<ProtectedRoute>
-								<HomePage
-									client={client}
-									session={session}
-									setSession={setSession}
-									socket={socket}
-									isConnected={isConnected}
-								/>
-							</ProtectedRoute>
-						}
-					/>
+						{/* Home Page */}
+						<Route
+							path="/home"
+							element={
+								<ProtectedRoute>
+									<HomePage
+										client={client}
+										session={session}
+										setSession={setSession}
+										socket={socket}
+										isConnected={isConnected}
+									/>
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* Social Page */}
-					<Route
-						path="/social"
-						element={
-							<ProtectedRoute>
-								<SocialPage
-									client={client}
-									session={session}
-									socket={socket}
-									isConnected={isConnected}
-								/>
-							</ProtectedRoute>
-						}
-					/>
+						{/* Social Page */}
+						<Route
+							path="/social"
+							element={
+								<ProtectedRoute>
+									<SocialPage
+										client={client}
+										session={session}
+										socket={socket}
+										isConnected={isConnected}
+									/>
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* Games Page */}
-					<Route
-						path="/games"
-						element={
-							<ProtectedRoute>
-								<GamesPage
-									client={client}
-									session={session}
-									socket={socket}
-									isConnected={isConnected}
-								/>
-							</ProtectedRoute>
-						}
-					/>
+						{/* Games Page */}
+						<Route
+							path="/games"
+							element={
+								<ProtectedRoute>
+									<GamesPage
+										client={client}
+										session={session}
+										socket={socket}
+										isConnected={isConnected}
+									/>
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* UNO Game Page */}
-					<Route
-						path="/games/uno"
-						element={
-							<ProtectedRoute>
-								<UNOGamePage
-									client={client}
-									session={session}
-									socket={socket}
-									isConnected={isConnected}
-								/>
-							</ProtectedRoute>
-						}
-					/>
+						{/* UNO Game Page */}
+						<Route
+							path="/games/uno"
+							element={
+								<ProtectedRoute>
+									<UNOGamePage
+										client={client}
+										session={session}
+										socket={socket}
+										isConnected={isConnected}
+									/>
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* Profile Page */}
-					<Route
-						path="/profile"
-						element={
-							<ProtectedRoute>
-								<ProfilePage client={client} session={session} />
-							</ProtectedRoute>
-						}
-					/>
+						{/* Profile Page */}
+						<Route
+							path="/profile"
+							element={
+								<ProtectedRoute>
+									<ProfilePage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* Default redirect */}
-					<Route
-						path="/"
-						element={
-							session ? (
-								<Navigate to="/home" replace />
-							) : (
-								<Navigate to="/login" replace />
-							)
-						}
-					/>
+						{/* Follow System Page */}
+						<Route
+							path="/follow"
+							element={
+								<ProtectedRoute>
+									<FollowSystemPage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
 
-					{/* 404 - Not Found */}
-					<Route
-						path="*"
-						element={
-							<div style={{ padding: "40px", textAlign: "center" }}>
-								<h1>404 - Page Not Found</h1>
-								<p>The page you're looking for doesn't exist.</p>
-								<a href="/home">Go to Home</a>
-							</div>
-						}
-					/>
-				</Routes>
-			</div>
+						{/* User Profile Page */}
+						<Route
+							path="/profile/:userId"
+							element={
+								<ProtectedRoute>
+									<UserProfilePage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Default redirect */}
+						<Route
+							path="/"
+							element={
+								session ? (
+									<Navigate to="/home" replace />
+								) : (
+									<Navigate to="/login" replace />
+								)
+							}
+						/>
+
+						{/* 404 - Not Found */}
+						<Route
+							path="*"
+							element={
+								<div style={{ padding: "40px", textAlign: "center" }}>
+									<h1>404 - Page Not Found</h1>
+									<p>The page you're looking for doesn't exist.</p>
+									<a href="/home">Go to Home</a>
+								</div>
+							}
+						/>
+					</Routes>
+				</div>
+			</NotificationProvider>
 		</Router>
 	);
 }

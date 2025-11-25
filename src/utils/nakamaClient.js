@@ -277,19 +277,27 @@ export function getGameModeDisplay(gameMode) {
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @param {string} content - Post content
+ * @param {string} visibility - Post visibility: 'public', 'friends', or 'private'
  * @param {string} mediaURL - Optional media URL
  * @returns {object} Created post
  */
-export async function createPost(client, session, content, mediaURL = "") {
+export async function createPost(
+	client,
+	session,
+	content,
+	visibility = "public",
+	mediaURL = ""
+) {
 	const response = await client.rpc(session, "social/create_post", {
 		content,
+		visibility,
 		media_url: mediaURL,
 	});
 	return parseRpcResponse(response);
 }
 
 /**
- * Get user feed
+ * Get user feed (personalized feed from followed users)
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @param {number} limit - Number of posts to fetch
@@ -298,6 +306,22 @@ export async function createPost(client, session, content, mediaURL = "") {
  */
 export async function getUserFeed(client, session, limit = 20, cursor = "") {
 	const response = await client.rpc(session, "social/get_feed", {
+		limit,
+		cursor,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get public feed (all public posts from all users)
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session (optional)
+ * @param {number} limit - Number of posts to fetch
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Feed data
+ */
+export async function getPublicFeed(client, session, limit = 20, cursor = "") {
+	const response = await client.rpc(session, "social/get_public_feed", {
 		limit,
 		cursor,
 	});
@@ -333,18 +357,31 @@ export async function unlikePost(client, session, postId) {
 }
 
 /**
- * Add comment to post
+ * Add comment to post or reply to a comment
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @param {string} postId - Post ID
  * @param {string} content - Comment content
+ * @param {string} parentCommentId - Parent comment ID (optional, for replies)
  * @returns {object} Created comment
  */
-export async function addComment(client, session, postId, content) {
-	const response = await client.rpc(session, "social/add_comment", {
+export async function addComment(
+	client,
+	session,
+	postId,
+	content,
+	parentCommentId = null
+) {
+	const payload = {
 		post_id: postId,
 		content,
-	});
+	};
+
+	if (parentCommentId) {
+		payload.parent_comment_id = parentCommentId;
+	}
+
+	const response = await client.rpc(session, "social/add_comment", payload);
 	return parseRpcResponse(response);
 }
 
@@ -398,12 +435,12 @@ export async function sendFollowRequest(client, session, targetUserId) {
  * Accept follow request
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
- * @param {string} fromUserId - User ID who sent the request
+ * @param {string} requesterId - User ID who sent the request
  * @returns {object} Response
  */
-export async function acceptFollowRequest(client, session, fromUserId) {
+export async function acceptFollowRequest(client, session, requesterId) {
 	const response = await client.rpc(session, "social/accept_follow_request", {
-		from_user_id: fromUserId,
+		requester_id: requesterId,
 	});
 	return parseRpcResponse(response);
 }
@@ -431,6 +468,95 @@ export async function searchUsers(client, session, query, limit = 20) {
 	const response = await client.rpc(session, "social/search_users", {
 		query,
 		limit,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Reject follow request
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} requesterId - User ID who sent the request
+ * @returns {object} Response
+ */
+export async function rejectFollowRequest(client, session, requesterId) {
+	const response = await client.rpc(session, "social/reject_follow_request", {
+		requester_id: requesterId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Cancel follow request
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} targetUserId - User ID to whom the request was sent
+ * @returns {object} Response
+ */
+export async function cancelFollowRequest(client, session, targetUserId) {
+	const response = await client.rpc(session, "social/cancel_follow_request", {
+		target_user_id: targetUserId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get sent follow requests
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Sent follow requests
+ */
+export async function getSentRequests(client, session) {
+	const response = await client.rpc(session, "social/get_sent_requests", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Unfollow a user
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} targetUserId - User ID to unfollow
+ * @returns {object} Response
+ */
+export async function unfollow(client, session, targetUserId) {
+	const response = await client.rpc(session, "social/unfollow", {
+		target_user_id: targetUserId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get followers list
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Followers list
+ */
+export async function getFollowers(client, session) {
+	const response = await client.rpc(session, "social/get_followers", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get following list
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Following list
+ */
+export async function getFollowing(client, session) {
+	const response = await client.rpc(session, "social/get_following", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get user profile with privacy controls
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} targetUserId - ID of the user whose profile to fetch
+ * @returns {Promise<Object>} User profile data
+ */
+export async function getUserProfile(client, session, targetUserId) {
+	const response = await client.rpc(session, "social/get_user_profile", {
+		target_user_id: targetUserId,
 	});
 	return parseRpcResponse(response);
 }

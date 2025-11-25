@@ -1,0 +1,561 @@
+.profile-page {
+	max-width: 900px;
+	margin: 0 auto;
+	padding: 20px;
+}
+
+.profile-header {
+	display: flex;
+	align-items: center;
+	gap: 15px;
+	margin-bottom: 20px;
+}
+
+.back-button {
+	background: #6c5ce7;
+	color: white;
+	border: none;
+	padding: 10px 20px;
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 14px;
+	transition: background 0.3s;
+}
+
+.back-button:hover {
+	background: #5f4dd1;
+}
+
+.profile-header h1 {
+	margin: 0;
+	font-size: 24px;
+	color: #2d3436;
+}
+
+/* Messages */
+.error-message {
+	background: #ff7675;
+	color: white;
+	padding: 12px 20px;
+	border-radius: 8px;
+	margin-bottom: 15px;
+	text-align: center;
+	font-size: 14px;
+}
+
+.success-message {
+	background: #00b894;
+	color: white;
+	padding: 12px 20px;
+	border-radius: 8px;
+	margin-bottom: 15px;
+	text-align: center;
+	font-size: 14px;
+}
+
+/* Profile Card */
+.profile-card {
+	background: white;
+	border-radius: 12px;
+	padding: 30px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+	margin-bottom: 20px;
+}
+
+.profile-basic {
+	display: flex;
+	gap: 20px;
+	margin-bottom: 20px;
+}
+
+.avatar-container {
+	position: relative;
+}
+
+.profile-avatar {
+	width: 120px;
+	height: 120px;
+	border-radius: 50%;
+	object-fit: cover;
+	border: 4px solid #6c5ce7;
+}
+
+.online-indicator {
+	position: absolute;
+	bottom: 5px;
+	right: 5px;
+	width: 20px;
+	height: 20px;
+	background: #00b894;
+	border: 3px solid white;
+	border-radius: 50%;
+}
+
+.profile-info {
+	flex: 1;
+}
+
+.profile-username {
+	font-size: 28px;
+	font-weight: bold;
+	color: #2d3436;
+	margin: 0 0 5px 0;
+}
+
+.profile-displayname {
+	font-size: 18px;
+	color: #636e72;
+	margin-bottom: 10px;
+	display: block;
+}
+
+.profile-bio {
+	font-size: 14px;
+	color: #636e72;
+	margin: 10px 0;
+	line-height: 1.5;
+}
+
+.profile-meta {
+	display: flex;
+	gap: 20px;
+	margin-top: 10px;
+}
+
+.meta-item {
+	font-size: 13px;
+	color: #636e72;
+}
+
+.status-online {
+	color: #00b894;
+	font-weight: 600;
+}
+
+.status-offline {
+	color: #636e72;
+}
+
+/* Stats */
+.profile-stats {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 20px;
+	padding: 20px 0;
+	border-top: 1px solid #dfe6e9;
+	border-bottom: 1px solid #dfe6e9;
+}
+
+.stat-item {
+	text-align: center;
+	transition: all 0.2s;
+	padding: 8px;
+	border-radius: 8px;
+}
+
+.stat-item.clickable:hover {
+	background: #f8f9fa;
+	transform: scale(1.05);
+	cursor: pointer;
+}
+
+.stat-value {
+	display: block;
+	font-size: 24px;
+	font-weight: bold;
+	color: #2d3436;
+}
+
+.stat-label {
+	display: block;
+	font-size: 13px;
+	color: #636e72;
+	margin-top: 5px;
+}
+
+/* Relationship Status */
+.relationship-status {
+	margin-top: 20px;
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+}
+
+.badge {
+	padding: 8px 16px;
+	border-radius: 20px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.badge-friend {
+	background: #00b894;
+	color: white;
+}
+
+.badge-following {
+	background: #6c5ce7;
+	color: white;
+}
+
+.badge-pending {
+	background: #fdcb6e;
+	color: #2d3436;
+}
+
+.badge-none {
+	background: #dfe6e9;
+	color: #636e72;
+}
+
+/* Profile Actions */
+.profile-actions {
+	margin-top: 20px;
+	display: flex;
+	gap: 10px;
+	justify-content: center;
+}
+
+.btn-follow {
+	background: #6c5ce7;
+	color: white;
+	border: none;
+	padding: 12px 30px;
+	border-radius: 8px;
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s;
+}
+
+.btn-follow:hover:not(:disabled) {
+	background: #5f4dd1;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(108, 92, 231, 0.3);
+}
+
+.btn-following {
+	background: #636e72;
+	color: white;
+	border: 2px solid #636e72;
+	padding: 10px 30px;
+	border-radius: 8px;
+	font-size: 15px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s;
+}
+
+.btn-following:hover:not(:disabled) {
+	background: #d63031;
+	border-color: #d63031;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(214, 48, 49, 0.3);
+}
+
+.btn-following:hover:not(:disabled)::after {
+	content: " Unfollow";
+}
+
+.btn-pending {
+	background: transparent;
+	color: #636e72;
+	border: 2px solid #636e72;
+	padding: 10px 30px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s;
+}
+
+.btn-pending:hover:not(:disabled) {
+	background: #636e72;
+	color: white;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(99, 110, 114, 0.3);
+}
+
+.btn-remove-follower {
+	background: #e74c3c;
+	color: white;
+	border: 2px solid #e74c3c;
+	padding: 10px 20px;
+	border-radius: 8px;
+	font-size: 14px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: all 0.3s;
+	margin-left: 10px;
+}
+
+.btn-remove-follower:hover:not(:disabled) {
+	background: #c0392b;
+	border-color: #c0392b;
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(231, 76, 60, 0.4);
+}
+
+.btn-follow:disabled,
+.btn-following:disabled,
+.btn-pending:disabled,
+.btn-remove-follower:disabled {
+	opacity: 0.6;
+	cursor: not-allowed;
+}
+
+.badge-friend-small {
+	padding: 4px 10px;
+	border-radius: 12px;
+	font-size: 11px;
+	font-weight: 600;
+	background: #00b894;
+	color: white;
+}
+
+/* Tabs */
+.tabs {
+	display: flex;
+	gap: 10px;
+	border-bottom: 2px solid #dfe6e9;
+	margin-bottom: 20px;
+}
+
+.tab {
+	background: none;
+	border: none;
+	padding: 12px 20px;
+	font-size: 14px;
+	font-weight: 600;
+	color: #636e72;
+	cursor: pointer;
+	border-bottom: 3px solid transparent;
+	transition: all 0.3s;
+}
+
+.tab:hover {
+	color: #6c5ce7;
+}
+
+.tab.active {
+	color: #6c5ce7;
+	border-bottom-color: #6c5ce7;
+}
+
+/* Posts List */
+.posts-list {
+	display: flex;
+	flex-direction: column;
+	gap: 15px;
+}
+
+.post-card {
+	background: #f8f9fa;
+	border-radius: 10px;
+	padding: 15px;
+	transition: transform 0.2s;
+}
+
+.post-card:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.post-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin-bottom: 10px;
+}
+
+.post-avatar {
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.post-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.post-username {
+	font-weight: 600;
+	color: #2d3436;
+	font-size: 14px;
+}
+
+.post-time {
+	font-size: 12px;
+	color: #636e72;
+}
+
+.post-visibility {
+	font-size: 11px;
+	padding: 4px 8px;
+	border-radius: 8px;
+	font-weight: 600;
+}
+
+.visibility-public {
+	background: #e3f2fd;
+	color: #1976d2;
+}
+
+.visibility-friends {
+	background: #e8f5e9;
+	color: #388e3c;
+}
+
+.visibility-private {
+	background: #fce4ec;
+	color: #c2185b;
+}
+
+.post-content {
+	font-size: 14px;
+	color: #2d3436;
+	line-height: 1.5;
+	margin-bottom: 10px;
+}
+
+.post-stats {
+	display: flex;
+	gap: 15px;
+	font-size: 13px;
+	color: #636e72;
+}
+
+/* Users List */
+.users-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.user-card {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px;
+	background: #f8f9fa;
+	border-radius: 10px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.user-card:hover {
+	background: #e9ecef;
+	transform: translateX(5px);
+}
+
+.user-avatar {
+	width: 50px;
+	height: 50px;
+	border-radius: 50%;
+	object-fit: cover;
+}
+
+.user-info {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+}
+
+.user-username {
+	font-weight: 600;
+	color: #2d3436;
+	font-size: 14px;
+}
+
+.user-displayname {
+	font-size: 12px;
+	color: #636e72;
+}
+
+/* Private Content Locked */
+.private-content-locked {
+	background: white;
+	border-radius: 12px;
+	padding: 60px 30px;
+	text-align: center;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.lock-icon {
+	font-size: 64px;
+	margin-bottom: 20px;
+}
+
+.private-content-locked h3 {
+	font-size: 24px;
+	color: #2d3436;
+	margin-bottom: 10px;
+}
+
+.private-content-locked p {
+	font-size: 16px;
+	color: #636e72;
+	margin: 10px 0;
+}
+
+.hint {
+	color: #6c5ce7;
+	font-weight: 600;
+}
+
+/* Loading & Error States */
+.loading-container,
+.error-container {
+	text-align: center;
+	padding: 60px 20px;
+}
+
+.spinner {
+	width: 50px;
+	height: 50px;
+	border: 4px solid #dfe6e9;
+	border-top-color: #6c5ce7;
+	border-radius: 50%;
+	animation: spin 1s linear infinite;
+	margin: 0 auto 20px;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+.error-message {
+	color: #d63031;
+	font-size: 16px;
+	margin-bottom: 20px;
+}
+
+.back-btn {
+	background: #6c5ce7;
+	color: white;
+	border: none;
+	padding: 10px 20px;
+	border-radius: 8px;
+	cursor: pointer;
+	font-size: 14px;
+}
+
+.back-btn:hover {
+	background: #5f4dd1;
+}
+
+.empty-state {
+	text-align: center;
+	padding: 40px 20px;
+	color: #636e72;
+}
+
+.empty-state p {
+	font-size: 14px;
+}
+

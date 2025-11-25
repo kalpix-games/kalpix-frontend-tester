@@ -55,6 +55,7 @@
 	font-weight: 500;
 	transition: all 0.3s ease;
 	background: rgba(255, 255, 255, 0.1);
+	position: relative;
 }
 
 .nav-link:hover {
@@ -73,6 +74,32 @@
 
 .nav-text {
 	font-size: 16px;
+}
+
+/* Notification Badge */
+.notification-badge {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	background: #ff4444;
+	color: white;
+	font-size: 11px;
+	font-weight: bold;
+	padding: 2px 6px;
+	border-radius: 10px;
+	min-width: 18px;
+	text-align: center;
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+	animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+	0%, 100% {
+		transform: scale(1);
+	}
+	50% {
+		transform: scale(1.1);
+	}
 }
 
 /* User Info */
