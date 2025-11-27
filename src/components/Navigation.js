@@ -53,6 +53,16 @@ function Navigation({ session, onLogout }) {
 					</NavLink>
 
 					<NavLink
+						to="/chat"
+						className={({ isActive }) =>
+							isActive ? "nav-link active" : "nav-link"
+						}
+					>
+						<span className="nav-icon">💬</span>
+						<span className="nav-text">Chat</span>
+					</NavLink>
+
+					<NavLink
 						to="/follow"
 						className={({ isActive }) =>
 							isActive ? "nav-link active" : "nav-link"

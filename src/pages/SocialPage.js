@@ -8,8 +8,18 @@ import {
 	unlikePost,
 	addComment,
 	getComments,
+	postStory,
+	uploadStoryMedia,
+	getStoryTray,
+	getUserStories,
+	viewStory,
+	getStoryViewers,
+	replyToStory,
 } from "../utils/nakamaClient";
-import { useNotifications } from "../contexts/NotificationContext";
+import {
+	useNotifications,
+	subscribeToEvent,
+} from "../contexts/NotificationContext";
 
 /**
  * Social Page Component
@@ -32,13 +42,32 @@ function SocialPage({ client, session, socket, isConnected }) {
 	const [selectedPost, setSelectedPost] = useState(null);
 	const [comments, setComments] = useState([]);
 	const [newComment, setNewComment] = useState("");
+	// Stories state
+	const [storyTray, setStoryTray] = useState([]);
+	const [storyTrayLoading, setStoryTrayLoading] = useState(false);
+	const [storyMediaUrl, setStoryMediaUrl] = useState("");
+	const [storyFile, setStoryFile] = useState(null);
+	const [storyCaption, setStoryCaption] = useState("");
+	const [storyVisibility, setStoryVisibility] = useState("followers");
+	const [storyMediaType, setStoryMediaType] = useState("image");
+	const [creatingStory, setCreatingStory] = useState(false);
+
+	const [storyViewerOpen, setStoryViewerOpen] = useState(false);
+	const [selectedStoryUser, setSelectedStoryUser] = useState(null);
+	const [userStories, setUserStories] = useState([]);
+	const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+	const [storyReply, setStoryReply] = useState("");
+	const [storyViewers, setStoryViewers] = useState([]);
+	const [storyViewersLoading, setStoryViewersLoading] = useState(false);
+
 	const [replyingTo, setReplyingTo] = useState(null); // { commentId, username }
 	const [loadingComments, setLoadingComments] = useState(false);
 
-	// Load posts and news on mount
+	// Load posts, news and stories on mount
 	useEffect(() => {
 		loadFeed();
 		loadNews();
+		loadStoryTray();
 	}, []);
 
 	// Reload feed when feed type changes
@@ -48,32 +77,65 @@ function SocialPage({ client, session, socket, isConnected }) {
 		}
 	}, [feedType]);
 
-	// Listen for real-time post notifications from NotificationContext
+	// Subscribe to real-time events
 	useEffect(() => {
-		// Get the latest notification
-		const latestNotification = notifications[0];
-
-		if (!latestNotification) return;
-
-		// Check if it's a new post notification (code 30)
-		if (latestNotification.code === 30) {
-			const content = latestNotification.content;
-			console.log("New post notification:", content);
-
-			// Only update feed if we're on the feed tab
+		// New post notification - reload feed
+		const unsubNewPost = subscribeToEvent("new_post", (content) => {
+			console.log("📝 Real-time new post:", content);
 			if (activeTab === "feed") {
-				// For "For You" tab, only show if it's from someone we follow
-				// For "Discover" tab, show all public posts
 				if (feedType === "discover" && content.visibility === "public") {
-					// Reload feed to show new post
 					loadFeed();
 				} else if (feedType === "foryou") {
-					// Reload feed to show new post from followed users
 					loadFeed();
 				}
 			}
-		}
-	}, [notifications, activeTab, feedType]);
+		});
+
+		// New story notification - reload story tray
+		const unsubNewStory = subscribeToEvent("new_story", (content) => {
+			console.log("📸 Real-time new story:", content);
+			loadStoryTray();
+		});
+
+		// Post like notification - update like count in real-time
+		const unsubPostLike = subscribeToEvent("post_like", (content) => {
+			console.log("❤️ Real-time post like:", content);
+			setPosts((prevPosts) =>
+				prevPosts.map((post) =>
+					post.postId === content.postID || post.id === content.postID
+						? { ...post, likesCount: (post.likesCount || 0) + 1 }
+						: post
+				)
+			);
+		});
+
+		// Post comment notification - update comment count in real-time
+		const unsubPostComment = subscribeToEvent("post_comment", (content) => {
+			console.log("💬 Real-time post comment:", content);
+			setPosts((prevPosts) =>
+				prevPosts.map((post) =>
+					post.postId === content.postID || post.id === content.postID
+						? { ...post, commentsCount: (post.commentsCount || 0) + 1 }
+						: post
+				)
+			);
+			// If comments modal is open for this post, reload comments
+			if (
+				selectedPost &&
+				(selectedPost.postId === content.postID ||
+					selectedPost.id === content.postID)
+			) {
+				loadComments(content.postID);
+			}
+		});
+
+		return () => {
+			unsubNewPost();
+			unsubNewStory();
+			unsubPostLike();
+			unsubPostComment();
+		};
+	}, [activeTab, feedType, selectedPost]);
 
 	// Load feed posts based on feed type
 	const loadFeed = async () => {
@@ -94,6 +156,195 @@ function SocialPage({ client, session, socket, isConnected }) {
 			setError(err.message || "Failed to load feed");
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	// Load story tray for the current user
+	const loadStoryTray = async () => {
+		setStoryTrayLoading(true);
+		try {
+			const data = await getStoryTray(client, session);
+			setStoryTray(data.items || []);
+		} catch (err) {
+			console.error("Failed to load story tray:", err);
+			setError(err.message || "Failed to load stories");
+		} finally {
+			setStoryTrayLoading(false);
+		}
+	};
+
+	// Helper: convert File object to base64 string (without data: prefix)
+	const fileToBase64 = (file) =>
+		new Promise((resolve, reject) => {
+			const reader = new FileReader();
+			reader.onload = () => {
+				const result = reader.result;
+				if (typeof result === "string") {
+					const commaIndex = result.indexOf(",");
+					resolve(commaIndex >= 0 ? result.substring(commaIndex + 1) : result);
+				} else {
+					reject(new Error("Failed to read file"));
+				}
+			};
+			reader.onerror = (e) => reject(e);
+			reader.readAsDataURL(file);
+		});
+
+	const handleStoryFileChange = (event) => {
+		const file = event.target.files && event.target.files[0];
+		if (!file) {
+			setStoryFile(null);
+			return;
+		}
+		setStoryFile(file);
+		// Infer media type from MIME type
+		if (file.type && file.type.startsWith("video/")) {
+			setStoryMediaType("video");
+		} else {
+			setStoryMediaType("image");
+		}
+		// Clear manual URL when a file is selected
+		setStoryMediaUrl("");
+	};
+
+	// Create new story
+	const handleCreateStory = async () => {
+		if (!storyFile && !storyMediaUrl.trim()) {
+			setError("Please provide a story image or video (file or URL)");
+			return;
+		}
+
+		setCreatingStory(true);
+		setError("");
+		setSuccess("");
+		try {
+			let mediaUrlToUse = storyMediaUrl.trim();
+			// If a file is selected, upload it first and use its S3 URL
+			if (storyFile) {
+				const base64Data = await fileToBase64(storyFile);
+				const upload = await uploadStoryMedia(
+					client,
+					session,
+					storyMediaType,
+					storyFile.name,
+					base64Data
+				);
+				mediaUrlToUse = upload.fileUrl || upload.url || upload.mediaUrl;
+			}
+
+			await postStory(
+				client,
+				session,
+				mediaUrlToUse,
+				storyMediaType,
+				storyCaption.trim(),
+				storyVisibility
+			);
+			setStoryMediaUrl("");
+			setStoryFile(null);
+			setStoryCaption("");
+			setStoryVisibility("followers");
+			setStoryMediaType("image");
+			setSuccess("Story posted successfully!");
+			setTimeout(() => setSuccess(""), 3000);
+			await loadStoryTray();
+		} catch (err) {
+			console.error("Failed to post story:", err);
+			setError(err.message || "Failed to post story");
+		} finally {
+			setCreatingStory(false);
+		}
+	};
+
+	const openStoryViewer = async (trayItem) => {
+		if (!trayItem || !trayItem.stories || trayItem.stories.length === 0) {
+			return;
+		}
+		setSelectedStoryUser(trayItem);
+		setUserStories(trayItem.stories);
+		setCurrentStoryIndex(0);
+		setStoryReply("");
+		setStoryViewers([]);
+		setStoryViewerOpen(true);
+
+		const firstStory = trayItem.stories[0];
+		try {
+			await viewStory(client, session, firstStory.storyId, trayItem.userId);
+			await loadStoryTray();
+		} catch (err) {
+			console.error("Failed to record story view:", err);
+		}
+	};
+
+	const closeStoryViewer = () => {
+		setStoryViewerOpen(false);
+		setSelectedStoryUser(null);
+		setUserStories([]);
+		setCurrentStoryIndex(0);
+		setStoryReply("");
+		setStoryViewers([]);
+	};
+
+	const goToStory = async (nextIndex) => {
+		if (!selectedStoryUser || userStories.length === 0) return;
+		if (nextIndex < 0 || nextIndex >= userStories.length) {
+			closeStoryViewer();
+			await loadStoryTray();
+			return;
+		}
+		setCurrentStoryIndex(nextIndex);
+		setStoryReply("");
+		setStoryViewers([]);
+		const story = userStories[nextIndex];
+		try {
+			await viewStory(client, session, story.storyId, selectedStoryUser.userId);
+		} catch (err) {
+			console.error("Failed to record story view:", err);
+		}
+	};
+
+	const goToNextStory = () => {
+		void goToStory(currentStoryIndex + 1);
+	};
+
+	const goToPrevStory = () => {
+		void goToStory(currentStoryIndex - 1);
+	};
+
+	const handleReplyToCurrentStory = async () => {
+		if (!storyReply.trim() || !selectedStoryUser || userStories.length === 0) {
+			return;
+		}
+		const story = userStories[currentStoryIndex];
+		try {
+			await replyToStory(
+				client,
+				session,
+				story.storyId,
+				selectedStoryUser.userId,
+				storyReply.trim()
+			);
+			setStoryReply("");
+			setSuccess("Reply sent!");
+			setTimeout(() => setSuccess(""), 2000);
+		} catch (err) {
+			console.error("Failed to send story reply:", err);
+			setError(err.message || "Failed to send story reply");
+		}
+	};
+
+	const loadCurrentStoryViewers = async () => {
+		if (!selectedStoryUser || userStories.length === 0) return;
+		const story = userStories[currentStoryIndex];
+		setStoryViewersLoading(true);
+		try {
+			const data = await getStoryViewers(client, session, story.storyId);
+			setStoryViewers(data.views || []);
+		} catch (err) {
+			console.error("Failed to load story viewers:", err);
+			setError(err.message || "Failed to load story viewers");
+		} finally {
+			setStoryViewersLoading(false);
 		}
 	};
 
@@ -342,6 +593,12 @@ function SocialPage({ client, session, socket, isConnected }) {
 		if (months < 12) return `${months}mo ago`;
 		return `${years}y ago`;
 	};
+	const currentStory =
+		userStories.length > 0
+			? userStories[
+					Math.min(Math.max(currentStoryIndex, 0), userStories.length - 1)
+			  ]
+			: null;
 
 	return (
 		<div className="social-page">
@@ -407,6 +664,309 @@ function SocialPage({ client, session, socket, isConnected }) {
 							>
 								🔄
 							</button>
+						</div>
+						{/* Stories Tray + Create Story */}
+						<div style={{ marginTop: "16px", marginBottom: "16px" }}>
+							{/* Stories Tray */}
+							<div
+								style={{
+									marginBottom: "12px",
+									padding: "12px",
+									borderRadius: "12px",
+									backgroundColor: "#ffffff",
+									boxShadow: "0 1px 3px rgba(15, 23, 42, 0.08)",
+								}}
+							>
+								<div
+									style={{
+										display: "flex",
+										justifyContent: "space-between",
+										alignItems: "center",
+										marginBottom: "8px",
+									}}
+								>
+									<h3 style={{ margin: 0, fontSize: "16px" }}>Stories</h3>
+									<button
+										className="refresh-btn"
+										onClick={loadStoryTray}
+										disabled={storyTrayLoading}
+										title="Refresh stories"
+									>
+										{storyTrayLoading ? "..." : "🔄"}
+									</button>
+								</div>
+								{storyTrayLoading && storyTray.length === 0 ? (
+									<div className="loading-state">
+										<p>Loading stories...</p>
+									</div>
+								) : storyTray.length === 0 ? (
+									<div className="empty-state">
+										<p>No stories yet. Post a story to share moments!</p>
+									</div>
+								) : (
+									<div
+										style={{
+											display: "flex",
+											gap: "12px",
+											overflowX: "auto",
+											paddingBottom: "4px",
+										}}
+									>
+										{storyTray.map((item) => (
+											<div
+												key={item.userId}
+												onClick={() => openStoryViewer(item)}
+												style={{
+													cursor: "pointer",
+													display: "flex",
+													flexDirection: "column",
+													alignItems: "center",
+													minWidth: "64px",
+												}}
+											>
+												<div
+													style={{
+														width: "56px",
+														height: "56px",
+														borderRadius: "50%",
+														border: item.hasUnseen
+															? "3px solid #ff4f8b"
+															: "2px solid #d1d5db",
+														display: "flex",
+														alignItems: "center",
+														justifyContent: "center",
+														overflow: "hidden",
+														backgroundColor: "#f3f4f6",
+													}}
+												>
+													{item.avatarUrl ? (
+														<img
+															src={item.avatarUrl}
+															alt={item.username}
+															style={{
+																width: "100%",
+																height: "100%",
+																objectFit: "cover",
+															}}
+														/>
+													) : (
+														<span style={{ fontSize: "24px" }}>👤</span>
+													)}
+												</div>
+												<div
+													style={{
+														marginTop: "4px",
+														fontSize: "11px",
+														textAlign: "center",
+														maxWidth: "64px",
+														whiteSpace: "nowrap",
+														overflow: "hidden",
+														textOverflow: "ellipsis",
+													}}
+												>
+													{item.userId === session.user_id
+														? "Your story"
+														: item.username}
+												</div>
+											</div>
+										))}
+									</div>
+								)}
+							</div>
+
+							{/* Create Story */}
+							<div className="create-post-card">
+								<h3>📸 Create Story</h3>
+								<p
+									style={{
+										marginBottom: "8px",
+										fontSize: "12px",
+										color: "#6b7280",
+									}}
+								>
+									Upload an image/video from your device or paste a URL.
+								</p>
+								<input
+									type="text"
+									className="post-input"
+									placeholder="Image or video URL..."
+									value={storyMediaUrl}
+									onChange={(e) => setStoryMediaUrl(e.target.value)}
+								/>
+								<input
+									type="file"
+									accept="image/*,video/*"
+									className="post-input"
+									onChange={handleStoryFileChange}
+									style={{ marginTop: "8px" }}
+								/>
+								<input
+									type="text"
+									className="post-input"
+									placeholder="Optional caption..."
+									value={storyCaption}
+									onChange={(e) => setStoryCaption(e.target.value)}
+									style={{ marginTop: "8px" }}
+								/>
+								<div className="post-controls">
+									<div className="visibility-selector">
+										<label htmlFor="story-visibility">
+											<span className="visibility-icon">
+												{storyVisibility === "public" && "🌍"}
+												{storyVisibility === "followers" && "👤"}
+												{storyVisibility === "friends" && "👥"}
+												{storyVisibility === "private" && "🔒"}
+											</span>
+											<span className="visibility-label">Visibility:</span>
+										</label>
+										<select
+											id="story-visibility"
+											className="visibility-dropdown"
+											value={storyVisibility}
+											onChange={(e) => setStoryVisibility(e.target.value)}
+										>
+											<option value="public">🌍 Public</option>
+											<option value="followers">👤 Followers</option>
+											<option value="friends">👥 Friends</option>
+											<option value="private">🔒 Private</option>
+										</select>
+									</div>
+									<div
+										style={{
+											display: "flex",
+											gap: "8px",
+											alignItems: "center",
+										}}
+									>
+										<select
+											value={storyMediaType}
+											onChange={(e) => setStoryMediaType(e.target.value)}
+											className="visibility-dropdown"
+										>
+											<option value="image">🖼️ Image</option>
+											<option value="video">🎬 Video</option>
+										</select>
+										<button
+											className="post-btn"
+											onClick={handleCreateStory}
+											disabled={
+												(!storyMediaUrl.trim() && !storyFile) || creatingStory
+											}
+										>
+											{creatingStory ? "Posting..." : "Post Story"}
+										</button>
+									</div>
+								</div>
+								{/* Story Viewer Modal */}
+								{storyViewerOpen && selectedStoryUser && currentStory && (
+									<div className="modal-overlay" onClick={closeStoryViewer}>
+										<div
+											className="story-modal"
+											onClick={(e) => e.stopPropagation()}
+										>
+											<div className="comments-modal-header">
+												<h3>
+													{selectedStoryUser.userId === session.user_id
+														? "Your story"
+														: selectedStoryUser.username}
+												</h3>
+												<button
+													className="close-modal-btn"
+													onClick={closeStoryViewer}
+												>
+													✕
+												</button>
+											</div>
+											<div className="story-modal-body">
+												<div className="story-media-wrapper">
+													{currentStory.mediaType === "video" ? (
+														<video
+															src={currentStory.mediaUrl}
+															controls
+															className="story-media"
+														/>
+													) : (
+														<img
+															src={currentStory.mediaUrl}
+															alt={currentStory.caption || "Story"}
+															className="story-media"
+														/>
+													)}
+												</div>
+												{currentStory.caption && (
+													<p className="story-caption">
+														{currentStory.caption}
+													</p>
+												)}
+												<div className="story-nav">
+													<button
+														className="story-nav-btn"
+														onClick={goToPrevStory}
+														disabled={currentStoryIndex === 0}
+													>
+														Prev
+													</button>
+													<div className="story-counter">
+														{currentStoryIndex + 1} / {userStories.length}
+													</div>
+													<button
+														className="story-nav-btn"
+														onClick={goToNextStory}
+														disabled={
+															currentStoryIndex === userStories.length - 1
+														}
+													>
+														Next
+													</button>
+												</div>
+												<div className="story-reply-section">
+													<input
+														type="text"
+														className="add-comment-input"
+														placeholder="Reply to this story..."
+														value={storyReply}
+														onChange={(e) => setStoryReply(e.target.value)}
+														onKeyPress={(e) => {
+															if (e.key === "Enter" && !e.shiftKey) {
+																e.preventDefault();
+																handleReplyToCurrentStory();
+															}
+														}}
+													/>
+													<button
+														className="send-comment-btn"
+														onClick={handleReplyToCurrentStory}
+														disabled={!storyReply.trim()}
+													>
+														Send
+													</button>
+												</div>
+												{selectedStoryUser.userId === session.user_id && (
+													<div className="story-viewers-section">
+														<button
+															className="refresh-btn"
+															onClick={loadCurrentStoryViewers}
+														>
+															View viewers ({storyViewers.length})
+														</button>
+														{storyViewersLoading ? (
+															<p>Loading viewers...</p>
+														) : storyViewers.length > 0 ? (
+															<ul className="story-viewers-list">
+																{storyViewers.map((viewer) => (
+																	<li key={viewer.userId}>{viewer.username}</li>
+																))}
+															</ul>
+														) : (
+															<p>No viewers yet.</p>
+														)}
+													</div>
+												)}
+											</div>
+										</div>
+									</div>
+								)}
+							</div>
 						</div>
 
 						{/* Create Post */}

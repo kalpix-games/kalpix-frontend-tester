@@ -70,7 +70,7 @@ h2 {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 400px), 1fr));
   gap: 15px;
   margin-bottom: 20px;
 }
@@ -237,6 +237,12 @@ button:disabled {
 }
 
 /* Responsive design */
+@media (max-width: 992px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 768px) {
   .container {
     padding: 10px;
@@ -244,14 +250,16 @@ button:disabled {
 
   .grid {
     grid-template-columns: 1fr;
+    gap: 10px;
   }
 
   h1 {
-    font-size: 2rem;
+    font-size: 1.5rem;
   }
 
   .section {
-    padding: 20px;
+    padding: 12px;
+    border-radius: 8px;
   }
 
   .button-group {
@@ -260,6 +268,25 @@ button:disabled {
 
   button {
     width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 8px;
+  }
+
+  h1 {
+    font-size: 1.25rem;
+  }
+
+  .section {
+    padding: 10px;
+    border-radius: 6px;
+  }
+
+  .grid {
+    gap: 8px;
   }
 }
 

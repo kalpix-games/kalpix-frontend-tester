@@ -561,6 +561,200 @@ export async function getUserProfile(client, session, targetUserId) {
 	return parseRpcResponse(response);
 }
 
+/**
+ * Get online status for multiple users
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string[]} userIds - Array of user IDs
+ * @returns {Promise<Object>} Online status data
+ */
+export async function getUsersOnlineStatus(client, session, userIds) {
+	const response = await client.rpc(session, "social/get_users_online_status", {
+		user_ids: userIds,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// STORY RPC FUNCTIONS
+// ========================================
+
+/**
+ * Create (post) a story
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} mediaUrl - Media URL (image/video)
+ * @param {string} mediaType - Media type: 'image' or 'video'
+ * @param {string} caption - Optional caption
+ * @param {string} visibility - Visibility: 'public', 'followers', 'friends', 'private'
+ * @returns {object} Created story
+ */
+export async function postStory(
+	client,
+	session,
+	mediaUrl,
+	mediaType = "image",
+	caption = "",
+	visibility = "followers"
+) {
+	const response = await client.rpc(session, "social/post_story", {
+		mediaUrl,
+		mediaType,
+		caption,
+		visibility,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Upload story media (image/video) to S3 and get a public URL.
+ * This reuses the chat media upload pipeline on the backend.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} mediaType - Media type: 'image' or 'video'
+ * @param {string} fileName - Original file name
+ * @param {string} fileData - Base64-encoded file contents (no data: prefix)
+ * @returns {object} MediaUpload record containing fileUrl
+ */
+export async function uploadStoryMedia(
+	client,
+	session,
+	mediaType,
+	fileName,
+	fileData
+) {
+	const response = await client.rpc(session, "social/upload_story_media", {
+		mediaType,
+		fileName,
+		fileData,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get the story tray for the current user (self + followed users).
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Story tray data
+ */
+
+/**
+ * Get the user's inbox channels (direct + accepted requests).
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Channels list
+ */
+export async function getInboxChannels(client, session) {
+	const response = await client.rpc(session, "chat/get_inbox_channels", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get the user's incoming message request channels.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Channels list
+ */
+export async function getRequestChannels(client, session) {
+	const response = await client.rpc(session, "chat/get_request_channels", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Accept a pending DM request channel.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID to accept
+ * @returns {object} Updated channel
+ */
+export async function acceptDMRequest(client, session, channelId) {
+	const response = await client.rpc(session, "chat/accept_dm_request", {
+		channel_id: channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Decline a pending DM request channel.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID to decline
+ * @returns {object} Updated channel
+ */
+export async function declineDMRequest(client, session, channelId) {
+	const response = await client.rpc(session, "chat/decline_dm_request", {
+		channel_id: channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+export async function getStoryTray(client, session) {
+	const response = await client.rpc(session, "social/get_story_tray", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get active stories for a specific user, applying visibility rules.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} targetUserId - User ID whose stories to fetch
+ * @returns {object} Stories response
+ */
+export async function getUserStories(client, session, targetUserId) {
+	const response = await client.rpc(session, "social/get_user_stories", {
+		target_user_id: targetUserId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Mark a story as viewed by the current user (idempotent).
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} storyId - Story ID
+ * @param {string} ownerId - Story owner's user ID
+ * @returns {object} Response message
+ */
+export async function viewStory(client, session, storyId, ownerId) {
+	const response = await client.rpc(session, "social/view_story", {
+		story_id: storyId,
+		owner_id: ownerId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get viewers list for one of the current user's stories.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} storyId - Story ID
+ * @returns {object} Viewers response
+ */
+export async function getStoryViewers(client, session, storyId) {
+	const response = await client.rpc(session, "social/get_story_viewers", {
+		story_id: storyId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Reply to a story via DM.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} storyId - Story ID
+ * @param {string} ownerId - Story owner's user ID
+ * @param {string} text - Reply text content
+ * @returns {object} Response containing channel and message
+ */
+export async function replyToStory(client, session, storyId, ownerId, text) {
+	const response = await client.rpc(session, "social/reply_story", {
+		storyId,
+		ownerId,
+		text,
+	});
+	return parseRpcResponse(response);
+}
+
 // ========================================
 // CHAT RPC FUNCTIONS
 // ========================================
@@ -608,6 +802,7 @@ export async function getChannels(client, session) {
  * @param {string} content - Message content
  * @param {string} messageType - Message type (text, image, etc.)
  * @param {string} mediaURL - Optional media URL
+ * @param {string} replyToId - Optional message ID to reply to
  * @returns {object} Sent message
  */
 export async function sendChatMessage(
@@ -616,14 +811,19 @@ export async function sendChatMessage(
 	channelId,
 	content,
 	messageType = "text",
-	mediaURL = ""
+	mediaURL = "",
+	replyToId = ""
 ) {
-	const response = await client.rpc(session, "chat/send_message", {
+	const payload = {
 		channel_id: channelId,
 		content,
 		message_type: messageType,
 		media_url: mediaURL,
-	});
+	};
+	if (replyToId) {
+		payload.reply_to_id = replyToId;
+	}
+	const response = await client.rpc(session, "chat/send_message", payload);
 	return parseRpcResponse(response);
 }
 
@@ -647,6 +847,191 @@ export async function getMessages(
 		channel_id: channelId,
 		limit,
 		cursor,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Send a typing indicator event for a channel.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID
+ * @param {boolean} isTyping - Whether the user is currently typing
+ * @returns {object} Response
+ */
+export async function sendTypingIndicator(
+	client,
+	session,
+	channelId,
+	isTyping
+) {
+	const response = await client.rpc(session, "chat/send_typing_indicator", {
+		channel_id: channelId,
+		is_typing: !!isTyping,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Mark a message as read in a channel.
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @returns {object} Response
+ */
+export async function markMessageRead(client, session, channelId, messageId) {
+	const response = await client.rpc(session, "chat/mark_read", {
+		channel_id: channelId,
+		message_id: messageId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Mark messages as delivered
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string[]} messageIds - Array of message IDs
+ * @returns {object} Response
+ */
+export async function markMessagesDelivered(
+	client,
+	session,
+	channelId,
+	messageIds
+) {
+	const response = await client.rpc(session, "chat/mark_delivered", {
+		channel_id: channelId,
+		message_ids: messageIds,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Add reaction to a message
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @param {string} emoji - Emoji reaction
+ * @returns {object} Updated message
+ */
+export async function addReaction(
+	client,
+	session,
+	channelId,
+	messageId,
+	emoji
+) {
+	const response = await client.rpc(session, "chat/add_reaction", {
+		channel_id: channelId,
+		message_id: messageId,
+		emoji: emoji,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Remove reaction from a message
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @param {string} emoji - Emoji reaction
+ * @returns {object} Updated message
+ */
+export async function removeReaction(
+	client,
+	session,
+	channelId,
+	messageId,
+	emoji
+) {
+	const response = await client.rpc(session, "chat/remove_reaction", {
+		channel_id: channelId,
+		message_id: messageId,
+		emoji: emoji,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Edit a message
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @param {string} newContent - New message content
+ * @returns {object} Updated message
+ */
+export async function editMessage(
+	client,
+	session,
+	channelId,
+	messageId,
+	newContent
+) {
+	const response = await client.rpc(session, "chat/edit_message", {
+		channel_id: channelId,
+		message_id: messageId,
+		new_content: newContent,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Delete a message
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string} messageId - Message ID
+ * @returns {object} Response
+ */
+export async function deleteMessage(client, session, channelId, messageId) {
+	const response = await client.rpc(session, "chat/delete_message", {
+		channel_id: channelId,
+		message_id: messageId,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// STREAM MANAGEMENT
+// ========================================
+
+/**
+ * Join a chat channel's stream for real-time events (typing indicators, read receipts)
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @returns {Promise<object>} Response
+ */
+export async function joinChannelStream(client, session, channelId) {
+	console.log("🔗 joinChannelStream called with channelId:", channelId);
+	try {
+		const response = await client.rpc(session, "chat/join_stream", {
+			channel_id: channelId,
+		});
+		console.log("🔗 joinChannelStream RPC response:", response);
+		return parseRpcResponse(response);
+	} catch (error) {
+		console.error("🔗 joinChannelStream RPC error:", error);
+		throw error;
+	}
+}
+
+/**
+ * Leave a chat channel's stream
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @returns {object} Response
+ */
+export async function leaveChannelStream(client, session, channelId) {
+	const response = await client.rpc(session, "chat/leave_stream", {
+		channel_id: channelId,
 	});
 	return parseRpcResponse(response);
 }

@@ -17,6 +17,7 @@ import UNOGamePage from "./pages/UNOGamePage";
 import ProfilePage from "./pages/ProfilePage";
 import FollowSystemPage from "./pages/FollowSystemPage";
 import UserProfilePage from "./pages/UserProfilePage";
+import ChatPage from "./pages/ChatPage";
 
 // Components
 import Navigation from "./components/Navigation";
@@ -190,6 +191,21 @@ function MainApp() {
 							element={
 								<ProtectedRoute>
 									<SocialPage
+										client={client}
+										session={session}
+										socket={socket}
+										isConnected={isConnected}
+									/>
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Chat / DM Page */}
+						<Route
+							path="/chat"
+							element={
+								<ProtectedRoute>
+									<ChatPage
 										client={client}
 										session={session}
 										socket={socket}

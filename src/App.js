@@ -1407,7 +1407,12 @@ function App({
 
 					{/* Center Column - Chat */}
 					<div>
-						<ChatSection client={client} session={session} onEvent={addEvent} />
+						<ChatSection
+							client={client}
+							session={session}
+							socket={socket}
+							onEvent={addEvent}
+						/>
 					</div>
 
 					{/* Right Column - Event Log */}
