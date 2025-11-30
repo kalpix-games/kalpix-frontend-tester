@@ -61,7 +61,7 @@ function Navigation({ session, onLogout }) {
 						<span className="nav-icon">💬</span>
 						<span className="nav-text">Chat</span>
 					</NavLink>
-
+					{/* 
 					<NavLink
 						to="/follow"
 						className={({ isActive }) =>
@@ -73,7 +73,7 @@ function Navigation({ session, onLogout }) {
 						{followRequestCount > 0 && (
 							<span className="notification-badge">{followRequestCount}</span>
 						)}
-					</NavLink>
+					</NavLink> */}
 				</div>
 
 				{/* User Info */}

@@ -1,0 +1,356 @@
+.find-people-page {
+  min-height: 100vh;
+  background: #f5f0ff;
+  color: #1a1a1a;
+}
+
+/* Header */
+.find-people-header {
+  display: flex;
+  align-items: center;
+  padding: 16px 20px;
+  gap: 16px;
+  background: #f5f0ff;
+}
+
+.find-people-header .back-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #e8e0f5;
+  border: none;
+  font-size: 24px;
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.find-people-header .back-btn:hover {
+  background: #d4c9e8;
+}
+
+.find-people-header h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* Search Bar */
+.find-people-search {
+  display: flex;
+  align-items: center;
+  margin: 8px 20px 20px;
+  padding: 14px 20px;
+  background: #fff;
+  border-radius: 30px;
+  border: 1px solid #e0d8f0;
+  gap: 12px;
+}
+
+.find-people-search .search-icon {
+  font-size: 20px;
+  color: #888;
+}
+
+.find-people-search .search-input {
+  flex: 1;
+  border: none;
+  background: none;
+  font-size: 16px;
+  color: #333;
+  outline: none;
+}
+
+.find-people-search .search-input::placeholder {
+  color: #999;
+}
+
+/* Section Label */
+.find-people-page .section-label {
+  padding: 0 20px 12px;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a1a1a;
+}
+
+/* Users List */
+.users-list {
+  padding: 0 20px;
+}
+
+.users-loading {
+  display: flex;
+  justify-content: center;
+  padding: 40px;
+}
+
+.users-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e8e0f5;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.users-empty {
+  text-align: center;
+  padding: 40px 20px;
+  color: #888;
+  font-size: 14px;
+}
+
+/* User Item */
+.user-item {
+	  display: flex;
+	  align-items: center;
+	  padding: 14px 0;
+	  border-bottom: 1px solid #e8e0f5;
+}
+
+.user-item:last-child {
+  border-bottom: none;
+}
+
+.user-avatar-wrapper {
+  margin-right: 14px;
+}
+
+.user-avatar-wrapper.clickable {
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+
+.user-avatar-wrapper.clickable:hover {
+  transform: scale(1.05);
+  opacity: 0.9;
+}
+
+.user-info.clickable {
+  cursor: pointer;
+  transition: background 0.2s;
+  padding: 4px 8px;
+  margin: -4px -8px;
+  border-radius: 8px;
+}
+
+.user-info.clickable:hover {
+  background: rgba(124, 58, 237, 0.08);
+}
+
+.user-avatar {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid #c9b8e8;
+}
+
+.user-avatar-placeholder {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #9c7cf4, #7b5cd6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 600;
+  color: #fff;
+  border: 2px solid #c9b8e8;
+}
+
+.user-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-name {
+	  font-size: 16px;
+	  font-weight: 500;
+	  color: #1a1a1a;
+	  margin-bottom: 2px;
+	  /* keep username on a single line, clip nicely if ever too long */
+	  white-space: nowrap;
+	  overflow: hidden;
+	  text-overflow: ellipsis;
+}
+
+.user-subtitle {
+  font-size: 13px;
+  color: #888;
+}
+
+/* User Actions */
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 12px;
+}
+
+.follow-btn {
+  padding: 10px 24px;
+  background: #7c3aed;
+  color: #fff;
+  border: none;
+  border-radius: 25px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.follow-btn:hover:not(:disabled) {
+  background: #6d28d9;
+}
+
+.follow-btn:disabled {
+  background: #a992d8;
+  cursor: not-allowed;
+}
+
+/* Following Badge */
+.following-badge {
+  padding: 8px 16px;
+  background: #e8e0f5;
+  color: #7c3aed;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Pending Badge */
+.pending-badge {
+  padding: 8px 14px;
+  background: #fff3cd;
+  color: #856404;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Cancel Button */
+.cancel-btn {
+  padding: 8px 18px;
+  background: #fff;
+  color: #dc3545;
+  border: 2px solid #dc3545;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.cancel-btn:hover:not(:disabled) {
+  background: #dc3545;
+  color: #fff;
+}
+
+.cancel-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.dismiss-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: none;
+  border: 2px solid #c9b8e8;
+  font-size: 20px;
+  color: #888;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.dismiss-btn:hover {
+  background: #f0e8ff;
+  border-color: #a992d8;
+  color: #666;
+}
+
+/* Empty State */
+.find-people-page .empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #888;
+}
+
+.find-people-page .empty-icon {
+  font-size: 64px;
+  margin-bottom: 16px;
+}
+
+.find-people-page .empty-state h3 {
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+.find-people-page .empty-state p {
+  font-size: 14px;
+}
+
+/* Responsive layout */
+@media (max-width: 768px) {
+	.find-people-header {
+		padding: 12px 16px;
+		gap: 10px;
+	}
+
+	.find-people-search {
+		margin: 8px 16px 16px;
+		padding: 12px 16px;
+	}
+
+	.users-list {
+		padding: 0 16px;
+	}
+
+	/* Keep row layout; just make actions more compact */
+	.user-actions {
+		gap: 8px;
+		margin-left: 8px;
+		flex-wrap: wrap;
+	}
+
+	.follow-btn,
+	.cancel-btn,
+	.following-badge,
+	.pending-badge {
+		padding-inline: 14px;
+		font-size: 13px;
+	}
+}
+
+@media (max-width: 480px) {
+	.find-people-header h1 {
+		font-size: 18px;
+	}
+
+	.users-list {
+		padding: 0 12px;
+	}
+
+	.follow-btn,
+	.cancel-btn,
+	.following-badge,
+	.pending-badge {
+		padding: 6px 10px;
+		font-size: 12px;
+	}
+}

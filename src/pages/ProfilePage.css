@@ -232,3 +232,18 @@
 	}
 }
 
+@media (max-width: 480px) {
+	.profile-header h1 {
+		font-size: 28px;
+	}
+
+	.profile-content {
+		padding: 24px 16px;
+	}
+
+	.profile-avatar {
+		width: 120px;
+		height: 120px;
+	}
+}
+

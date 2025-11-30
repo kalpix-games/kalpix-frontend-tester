@@ -15,9 +15,13 @@ import SocialPage from "./pages/SocialPage";
 import GamesPage from "./pages/GamesPage";
 import UNOGamePage from "./pages/UNOGamePage";
 import ProfilePage from "./pages/ProfilePage";
-import FollowSystemPage from "./pages/FollowSystemPage";
 import UserProfilePage from "./pages/UserProfilePage";
 import ChatPage from "./pages/ChatPage";
+import ChatConversationPage from "./pages/ChatConversationPage";
+import NewConversationPage from "./pages/NewConversationPage";
+import MessageRequestPage from "./pages/MessageRequestPage";
+import FollowRequestsPage from "./pages/FollowRequestsPage";
+import FindPeoplePage from "./pages/FindPeoplePage";
 
 // Components
 import Navigation from "./components/Navigation";
@@ -145,7 +149,7 @@ function MainApp() {
 
 	return (
 		<Router>
-			<NotificationProvider socket={socket}>
+			<NotificationProvider socket={socket} client={client} session={session}>
 				<div className="app-container">
 					{/* Navigation - only show when logged in */}
 					{session && <Navigation session={session} onLogout={handleLogout} />}
@@ -205,12 +209,65 @@ function MainApp() {
 							path="/chat"
 							element={
 								<ProtectedRoute>
-									<ChatPage
+									<ChatPage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Chat Conversation Page */}
+						<Route
+							path="/chat/:channelId"
+							element={
+								<ProtectedRoute>
+									<ChatConversationPage
 										client={client}
 										session={session}
 										socket={socket}
-										isConnected={isConnected}
 									/>
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* New Conversation Page (no channel yet) */}
+						<Route
+							path="/chat/new/:userId"
+							element={
+								<ProtectedRoute>
+									<NewConversationPage
+										client={client}
+										session={session}
+										socket={socket}
+									/>
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Message Request Page */}
+						<Route
+							path="/chat/request/:channelId"
+							element={
+								<ProtectedRoute>
+									<MessageRequestPage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Follow Requests Page */}
+						<Route
+							path="/follow-requests"
+							element={
+								<ProtectedRoute>
+									<FollowRequestsPage client={client} session={session} />
+								</ProtectedRoute>
+							}
+						/>
+
+						{/* Find People Page */}
+						<Route
+							path="/find-people"
+							element={
+								<ProtectedRoute>
+									<FindPeoplePage client={client} session={session} />
 								</ProtectedRoute>
 							}
 						/>
@@ -251,16 +308,6 @@ function MainApp() {
 							element={
 								<ProtectedRoute>
 									<ProfilePage client={client} session={session} />
-								</ProtectedRoute>
-							}
-						/>
-
-						{/* Follow System Page */}
-						<Route
-							path="/follow"
-							element={
-								<ProtectedRoute>
-									<FollowSystemPage client={client} session={session} />
 								</ProtectedRoute>
 							}
 						/>

@@ -326,3 +326,22 @@
 	}
 }
 
+@media (max-width: 480px) {
+	.welcome-section {
+		padding: 24px 16px;
+	}
+
+	.welcome-section h1 {
+		font-size: 24px;
+	}
+
+	.stats-grid {
+		grid-template-columns: 1fr;
+		gap: 12px;
+	}
+
+	.game-card {
+		padding: 20px;
+	}
+}
+

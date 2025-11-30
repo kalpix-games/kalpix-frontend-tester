@@ -10,6 +10,7 @@ import {
 	declineDMRequest,
 	sendTypingIndicator,
 	markMessageRead,
+	markMessagesDelivered,
 	addReaction,
 	removeReaction,
 	editMessage,
@@ -18,7 +19,7 @@ import {
 	joinChannelStream,
 	leaveChannelStream,
 } from "../utils/nakamaClient";
-import { subscribeToEvent } from "../contexts/NotificationContext";
+import { subscribeToEvent, emitEvent } from "../contexts/NotificationContext";
 
 /**
  * Format timestamp for display
@@ -194,7 +195,17 @@ function ChatHeader({
  * Chat Section Component
  * Handles chat channels, messages, and bot conversations
  */
-function ChatSection({ client, session, socket, onEvent }) {
+function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
+	// Safe event handler - works even if onEvent is not provided
+	const safeOnEvent = (eventName, message, type) => {
+		if (typeof onEvent === "function") {
+			onEvent(eventName, message, type);
+		} else {
+			// Log to console as fallback
+			console.log(`[${type}] ${eventName}: ${message}`);
+		}
+	};
+
 	const [activeTab, setActiveTab] = useState("channels"); // channels, create, messages
 
 	// Channels state
@@ -226,6 +237,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 	const typingTimeoutRef = useRef(null);
 	const typingActiveRef = useRef(false);
 	const remoteTypingTimeoutRef = useRef(null);
+	const initialChannelLoadedRef = useRef(false);
 
 	// Load channels on mount / when switching to channels tab
 	useEffect(() => {
@@ -233,6 +245,22 @@ function ChatSection({ client, session, socket, onEvent }) {
 			loadChannels(channelView);
 		}
 	}, [session, activeTab]);
+
+	// Auto-select channel if initialChannelId is provided
+	useEffect(() => {
+		if (
+			initialChannelId &&
+			channels.length > 0 &&
+			!initialChannelLoadedRef.current
+		) {
+			const channel = channels.find((c) => c.channelId === initialChannelId);
+			if (channel) {
+				setSelectedChannel(channel);
+				setActiveTab("messages");
+				initialChannelLoadedRef.current = true;
+			}
+		}
+	}, [initialChannelId, channels]);
 
 	// Subscribe to real-time channel and DM events
 	useEffect(() => {
@@ -326,6 +354,27 @@ function ChatSection({ client, session, socket, onEvent }) {
 			);
 		});
 
+		// Subscribe to delivery receipt notifications
+		const unsubscribeDeliveryReceipt = subscribeToEvent(
+			"delivery_receipt",
+			(data) => {
+				console.log("📬 Delivery receipt event received:", data);
+				// Only handle events for this channel
+				const receiptChannelId = data.channel_id || data.channelId;
+				if (receiptChannelId !== channelId) return;
+
+				// Mark message as delivered in local state (only if not already seen)
+				const receiptMessageId = data.message_id || data.messageId;
+				setMessages((prevMessages) =>
+					prevMessages.map((m) =>
+						m.messageId === receiptMessageId && m.status !== "seen"
+							? { ...m, status: "delivered" }
+							: m
+					)
+				);
+			}
+		);
+
 		// Subscribe to new chat messages
 		const unsubscribeChatMessage = subscribeToEvent("chat_message", (data) => {
 			console.log("💬 Chat message event received:", data);
@@ -339,6 +388,10 @@ function ChatSection({ client, session, socket, onEvent }) {
 			if (msgSenderId === session.user_id) return;
 
 			const replyToId = data.reply_to_id || data.replyToId || "";
+			// Get reply info from notification (backend now includes these fields)
+			const replyToSenderName =
+				data.reply_to_sender_name || data.replyToSenderName || "";
+			const replyToContent = data.reply_to_content || data.replyToContent || "";
 
 			// Add the message directly from notification data
 			const newMessage = {
@@ -348,12 +401,18 @@ function ChatSection({ client, session, socket, onEvent }) {
 				senderName: data.sender_username || data.senderName || "Unknown",
 				content: data.content,
 				messageType: data.message_type || "text",
-				status: "sent",
+				status: data.status || "sent",
 				createdAt: data.created_at || Date.now(),
 				isRead: false,
 				replyToId: replyToId,
-				replyToSenderName: "",
-				replyToContent: "",
+				replyToSenderName: replyToSenderName,
+				replyToContent: replyToContent,
+				// Story reply info
+				storyId: data.story_id || data.storyId || "",
+				storyOwnerId: data.story_owner_id || data.storyOwnerId || "",
+				storyMediaUrl: data.story_media_url || data.storyMediaUrl || "",
+				storyMediaType: data.story_media_type || data.storyMediaType || "",
+				storyCaption: data.story_caption || data.storyCaption || "",
 			};
 
 			setMessages((prevMessages) => {
@@ -363,8 +422,8 @@ function ChatSection({ client, session, socket, onEvent }) {
 				);
 				if (exists) return prevMessages;
 
-				// If this is a reply, find the original message and populate reply info
-				if (replyToId) {
+				// If this is a reply and backend didn't provide reply info, try to find it locally
+				if (replyToId && !replyToSenderName) {
 					const repliedToMsg = prevMessages.find(
 						(m) => m.messageId === replyToId
 					);
@@ -378,6 +437,22 @@ function ChatSection({ client, session, socket, onEvent }) {
 
 				return [...prevMessages, newMessage];
 			});
+
+			// Mark message as delivered to sender
+			if (newMessage.messageId) {
+				markMessagesDelivered(client, session, channelId, [
+					newMessage.messageId,
+				])
+					.then(() => {
+						console.log(
+							"📬 Message marked as delivered (via notification):",
+							newMessage.messageId
+						);
+					})
+					.catch((err) => {
+						console.error("Failed to mark message as delivered:", err);
+					});
+			}
 		});
 
 		// Subscribe to message updates (edits)
@@ -432,7 +507,8 @@ function ChatSection({ client, session, socket, onEvent }) {
 			"reaction_update",
 			(data) => {
 				console.log("😀 Reaction update event received:", data);
-				const msgChannelId = data.channel_id || data.channelID;
+				const msgChannelId =
+					data.channel_id || data.channelID || data.channelId;
 				const msgId = data.message_id || data.messageId;
 				const emoji = data.emoji;
 				const userId = data.user_id || data.userId;
@@ -472,6 +548,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 		return () => {
 			unsubscribeTyping();
 			unsubscribeReadReceipt();
+			unsubscribeDeliveryReceipt();
 			unsubscribeChatMessage();
 			unsubscribeMessageUpdate();
 			unsubscribeMessageDelete();
@@ -587,6 +664,20 @@ function ChatSection({ client, session, socket, onEvent }) {
 
 							return [...prevMessages, newMessage];
 						});
+
+						// Mark message as delivered to sender
+						markMessagesDelivered(client, session, channelId, [
+							newMessage.messageId,
+						])
+							.then(() => {
+								console.log(
+									"📬 Message marked as delivered:",
+									newMessage.messageId
+								);
+							})
+							.catch((err) => {
+								console.error("Failed to mark message as delivered:", err);
+							});
 					}
 				} else if (payload.type === "message_update") {
 					// Real-time message update (edit)
@@ -632,12 +723,18 @@ function ChatSection({ client, session, socket, onEvent }) {
 				} else if (payload.type === "reaction_update") {
 					// Real-time reaction update
 					console.log("😊 Received reaction_update payload:", payload);
+					// Support both flat payload and { data: {...} } shapes
+					const reactionPayload = payload.data || payload;
 					const msgId =
-						payload.messageID || payload.messageId || payload.message_id;
-					const emoji = payload.emoji;
-					const action = payload.action; // "added" or "removed"
+						reactionPayload.messageID ||
+						reactionPayload.messageId ||
+						reactionPayload.message_id;
+					const emoji = reactionPayload.emoji;
+					const action = reactionPayload.action; // "added" or "removed"
 					const reactingUserId =
-						payload.userID || payload.userId || payload.user_id;
+						reactionPayload.userID ||
+						reactionPayload.userId ||
+						reactionPayload.user_id;
 
 					if (msgId && emoji) {
 						setMessages((prevMessages) =>
@@ -779,13 +876,13 @@ function ChatSection({ client, session, socket, onEvent }) {
 				fetchOnlineStatuses(Array.from(allParticipants));
 			}
 
-			onEvent(
+			safeOnEvent(
 				"channels_loaded",
 				`Loaded ${result.channels?.length || 0} ${view} channels`,
 				"success"
 			);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"channels_error",
 				`Failed to load ${view} channels: ${error.message}`,
 				"error"
@@ -797,12 +894,12 @@ function ChatSection({ client, session, socket, onEvent }) {
 
 	const handleCreateChannel = async () => {
 		if (!channelName.trim() && channelType !== "direct") {
-			onEvent("validation_error", "Channel name is required", "error");
+			safeOnEvent("validation_error", "Channel name is required", "error");
 			return;
 		}
 
 		if (!participantIds.trim()) {
-			onEvent("validation_error", "Participant IDs are required", "error");
+			safeOnEvent("validation_error", "Participant IDs are required", "error");
 			return;
 		}
 
@@ -818,13 +915,13 @@ function ChatSection({ client, session, socket, onEvent }) {
 				channelName,
 				participantArray
 			);
-			onEvent("channel_created", "Channel created successfully", "success");
+			safeOnEvent("channel_created", "Channel created successfully", "success");
 			setChannelName("");
 			setParticipantIds("");
 			setActiveTab("channels");
 			loadChannels(channelView);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"channel_error",
 				`Failed to create channel: ${error.message}`,
 				"error"
@@ -858,7 +955,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 			});
 
 			setMessages(enrichedMessages);
-			onEvent(
+			safeOnEvent(
 				"messages_loaded",
 				`Loaded ${loadedMessages.length} messages`,
 				"info"
@@ -869,17 +966,24 @@ function ChatSection({ client, session, socket, onEvent }) {
 				const unreadIncoming = enrichedMessages.filter(
 					(msg) => msg.senderId !== session.user_id && !msg.isRead
 				);
+				let markedAny = false;
 				for (const msg of unreadIncoming) {
 					try {
 						await markMessageRead(client, session, channelId, msg.messageId);
+						markedAny = true;
 					} catch (err) {
 						console.error("Failed to mark message as read", err);
-						break;
+						// Don't stop marking subsequent messages as read if one fails
+						continue;
 					}
+				}
+				// Emit event so ChatPage can reset unread count for this channel
+				if (markedAny) {
+					emitEvent("messages_read", { channelId });
 				}
 			}
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"messages_error",
 				`Failed to load messages: ${error.message}`,
 				"error"
@@ -981,7 +1085,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 					msg.messageId === tempMessageId ? { ...msg, status: "failed" } : msg
 				)
 			);
-			onEvent(
+			safeOnEvent(
 				"message_error",
 				`Failed to send message: ${error.message}`,
 				"error"
@@ -992,6 +1096,68 @@ function ChatSection({ client, session, socket, onEvent }) {
 	const handleSelectChannel = (channel) => {
 		setSelectedChannel(channel);
 		setActiveTab("messages");
+	};
+
+	// Handle retry for failed messages
+	const handleRetryMessage = async (failedMessage) => {
+		if (!selectedChannel) return;
+
+		// Update status to pending
+		setMessages((prev) =>
+			prev.map((msg) =>
+				msg.messageId === failedMessage.messageId
+					? { ...msg, status: "pending" }
+					: msg
+			)
+		);
+
+		try {
+			const result = await sendChatMessage(
+				client,
+				session,
+				selectedChannel.channelId,
+				failedMessage.content,
+				failedMessage.messageType || "text",
+				failedMessage.mediaUrl || "",
+				failedMessage.replyToId || ""
+			);
+
+			// Update with real message data
+			setMessages((prev) =>
+				prev.map((msg) =>
+					msg.messageId === failedMessage.messageId
+						? {
+								...msg,
+								messageId:
+									result.messageId ||
+									result.message?.messageId ||
+									msg.messageId,
+								status: "sent",
+								createdAt: result.message?.createdAt || msg.createdAt,
+						  }
+						: msg
+				)
+			);
+			safeOnEvent(
+				"message_retry_success",
+				"Message sent successfully",
+				"success"
+			);
+		} catch (error) {
+			// Mark as failed again
+			setMessages((prev) =>
+				prev.map((msg) =>
+					msg.messageId === failedMessage.messageId
+						? { ...msg, status: "failed" }
+						: msg
+				)
+			);
+			safeOnEvent(
+				"message_retry_error",
+				`Failed to send message: ${error.message}`,
+				"error"
+			);
+		}
 	};
 
 	// Handle reaction click - toggle reaction
@@ -1008,7 +1174,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 					messageId,
 					emoji
 				);
-				onEvent("reaction_removed", `Removed ${emoji} reaction`, "success");
+				safeOnEvent("reaction_removed", `Removed ${emoji} reaction`, "success");
 			} else {
 				await addReaction(
 					client,
@@ -1017,12 +1183,12 @@ function ChatSection({ client, session, socket, onEvent }) {
 					messageId,
 					emoji
 				);
-				onEvent("reaction_added", `Added ${emoji} reaction`, "success");
+				safeOnEvent("reaction_added", `Added ${emoji} reaction`, "success");
 			}
 			// Reload messages to show updated reactions
 			loadMessages(selectedChannel.channelId);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"reaction_error",
 				`Failed to update reaction: ${error.message}`,
 				"error"
@@ -1044,7 +1210,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 			);
 			loadMessages(selectedChannel.channelId);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"reaction_error",
 				`Failed to add reaction: ${error.message}`,
 				"error"
@@ -1075,7 +1241,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 			);
 			setEditingMessage(null);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"edit_error",
 				`Failed to edit message: ${error.message}`,
 				"error"
@@ -1107,7 +1273,7 @@ function ChatSection({ client, session, socket, onEvent }) {
 				)
 			);
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"delete_error",
 				`Failed to delete message: ${error.message}`,
 				"error"
@@ -1154,11 +1320,11 @@ function ChatSection({ client, session, socket, onEvent }) {
 	const handleAcceptRequest = async (channelId) => {
 		try {
 			await acceptDMRequest(client, session, channelId);
-			onEvent("dm_request_accepted", "DM request accepted", "success");
+			safeOnEvent("dm_request_accepted", "DM request accepted", "success");
 			// After accepting, refresh inbox and requests
 			loadChannels(channelView === "requests" ? "requests" : "inbox");
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"dm_request_error",
 				`Failed to accept DM request: ${error.message}`,
 				"error"
@@ -1169,11 +1335,11 @@ function ChatSection({ client, session, socket, onEvent }) {
 	const handleDeclineRequest = async (channelId) => {
 		try {
 			await declineDMRequest(client, session, channelId);
-			onEvent("dm_request_declined", "DM request declined", "info");
+			safeOnEvent("dm_request_declined", "DM request declined", "info");
 			// After declining, refresh requests view
 			loadChannels("requests");
 		} catch (error) {
-			onEvent(
+			safeOnEvent(
 				"dm_request_error",
 				`Failed to decline DM request: ${error.message}`,
 				"error"
@@ -2151,6 +2317,25 @@ function ChatSection({ client, session, socket, onEvent }) {
 													>
 														{getStatusIcon(msg.status, msg.isRead)}
 													</span>
+												)}
+												{/* Retry button for failed messages */}
+												{isMyMessage && msg.status === "failed" && (
+													<button
+														onClick={() => handleRetryMessage(msg)}
+														style={{
+															marginLeft: "8px",
+															padding: "2px 8px",
+															fontSize: "11px",
+															backgroundColor: "#EF4444",
+															color: "white",
+															border: "none",
+															borderRadius: "4px",
+															cursor: "pointer",
+														}}
+														title="Retry sending message"
+													>
+														Retry
+													</button>
 												)}
 											</div>
 										</div>

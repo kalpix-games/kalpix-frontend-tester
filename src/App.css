@@ -178,7 +178,6 @@ button {
   font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
-  min-width: 120px;
 }
 
 button:disabled {

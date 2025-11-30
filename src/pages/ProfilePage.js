@@ -2,6 +2,16 @@ import React, { useState, useEffect } from "react";
 import { getUserProfile, updateUserProfile } from "../utils/authClient";
 import "./ProfilePage.css";
 
+// Country code to flag emoji converter
+const getCountryFlag = (countryCode) => {
+	if (!countryCode || countryCode.length !== 2) return "🌍";
+	const codePoints = countryCode
+		.toUpperCase()
+		.split("")
+		.map((char) => 127397 + char.charCodeAt(0));
+	return String.fromCodePoint(...codePoints);
+};
+
 /**
  * Profile Page Component
  * Displays and allows editing of user profile information
@@ -87,11 +97,10 @@ function ProfilePage({ client, session }) {
 	const formatDate = (timestamp) => {
 		if (!timestamp) return "N/A";
 		const date = new Date(timestamp * 1000);
-		return date.toLocaleDateString("en-US", {
-			year: "numeric",
-			month: "long",
-			day: "numeric",
-		});
+		const day = date.getDate();
+		const month = date.toLocaleString("en-US", { month: "short" });
+		const year = date.getFullYear();
+		return `${day} ${month} ${year}`;
 	};
 
 	if (loading && !profile) {
@@ -179,7 +188,13 @@ function ProfilePage({ client, session }) {
 									/>
 								) : (
 									<span className="info-value">
-										{profile.country || "Not set"}
+										{profile.country ? (
+											<>
+												{getCountryFlag(profile.country)} {profile.country}
+											</>
+										) : (
+											"Not set"
+										)}
 									</span>
 								)}
 							</div>

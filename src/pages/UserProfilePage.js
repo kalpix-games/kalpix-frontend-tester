@@ -1,19 +1,30 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
 	getUserProfile,
+	getChannels,
 	sendFollowRequest,
 	cancelFollowRequest,
 	unfollow,
+	getFollowing,
+	getSentRequests,
 } from "../utils/nakamaClient";
-import FollowersModal from "../components/FollowersModal";
+import { subscribeToEvent } from "../contexts/NotificationContext";
 import "./UserProfilePage.css";
 
+// Country code to flag emoji converter
+const getCountryFlag = (countryCode) => {
+	if (!countryCode || countryCode.length !== 2) return "🌍";
+	const codePoints = countryCode
+		.toUpperCase()
+		.split("")
+		.map((char) => 127397 + char.charCodeAt(0));
+	return String.fromCodePoint(...codePoints);
+};
+
 /**
- * User Profile Page Component
- * Displays user profile with privacy controls
- * - Public info: always visible
- * - Private info: visible only to friends or profile owner
+ * User Profile Page Component - Redesigned with dark purple theme
+ * Displays other user's profile with Follow/Send Message buttons
  */
 function UserProfilePage({ client, session }) {
 	const { userId } = useParams();
@@ -21,15 +32,133 @@ function UserProfilePage({ client, session }) {
 	const [profile, setProfile] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState("");
-	const [success, setSuccess] = useState("");
+	const [activeTab, setActiveTab] = useState("posts");
 	const [actionLoading, setActionLoading] = useState(false);
-	const [activeTab, setActiveTab] = useState("posts"); // 'posts', 'followers', 'following'
-	const [showFollowersModal, setShowFollowersModal] = useState(false);
-	const [showFollowingModal, setShowFollowingModal] = useState(false);
-	const [showFriendsModal, setShowFriendsModal] = useState(false);
+	const [followStatus, setFollowStatus] = useState("none"); // none, following, pending
+
+	// Sample posts for demo (in real app, fetch from backend)
+	const [posts] = useState([
+		{
+			id: 1,
+			type: "image",
+			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+		},
+		{
+			id: 2,
+			type: "image",
+			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+		},
+		{
+			id: 3,
+			type: "image",
+			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+		},
+		{
+			id: 4,
+			type: "image",
+			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+		},
+	]);
+
+	// Load follow status
+	const loadFollowStatus = useCallback(async () => {
+		if (!client || !session || !userId) return;
+		try {
+			// Check if already following
+			const followingResult = await getFollowing(client, session);
+			const following = followingResult.following || [];
+			if (following.some((f) => f.userId === userId)) {
+				setFollowStatus("following");
+				return;
+			}
+
+			// Check if request is pending
+			const sentResult = await getSentRequests(client, session);
+			// Backend returns { sent: [...] } with toUserId field
+			const sentRequests = sentResult.sent || sentResult.requests || [];
+			if (
+				sentRequests.some(
+					(r) => r.toUserId === userId || r.targetUserId === userId
+				)
+			) {
+				setFollowStatus("pending");
+				return;
+			}
+
+			setFollowStatus("none");
+		} catch (err) {
+			console.error("Failed to load follow status:", err);
+		}
+	}, [client, session, userId]);
 
 	useEffect(() => {
 		loadProfile();
+		loadFollowStatus();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [userId]);
+
+	// Subscribe to real-time follow status updates
+	useEffect(() => {
+		// When your follow request is accepted by this user
+		const unsubAccepted = subscribeToEvent("follow_accepted", (data) => {
+			const accepterId = data.accepterID || data.fromUserId || data.accepter_id;
+			if (accepterId === userId) {
+				setFollowStatus("following");
+				// Update profile counts - you are now following this user
+				setProfile((prev) =>
+					prev
+						? {
+								...prev,
+								followersCount: (prev.followersCount || 0) + 1,
+						  }
+						: prev
+				);
+			}
+		});
+
+		// When your follow request is rejected by this user
+		const unsubRejected = subscribeToEvent("follow_rejected", (data) => {
+			const rejecterId = data.rejecterID || data.fromUserId || data.rejecter_id;
+			if (rejecterId === userId) {
+				setFollowStatus("none");
+			}
+		});
+
+		// When someone follows you (you're viewing their profile)
+		const unsubFollowRequest = subscribeToEvent("follow_request", (data) => {
+			const requesterId =
+				data.requesterID || data.fromUserId || data.requester_id;
+			if (requesterId === userId) {
+				// This user sent you a follow request - no count change needed here
+			}
+		});
+
+		// When you accept someone's follow request (viewing their profile)
+		const unsubAcceptedSelf = subscribeToEvent(
+			"follow_request_accepted_self",
+			(data) => {
+				const acceptedUserId =
+					data.acceptedUserId || data.fromUserId || data.accepted_user_id;
+				if (acceptedUserId === userId) {
+					// You accepted this user's follow request - their following count increases
+					setProfile((prev) =>
+						prev
+							? {
+									...prev,
+									followingCount: (prev.followingCount || 0) + 1,
+							  }
+							: prev
+					);
+				}
+			}
+		);
+
+		return () => {
+			unsubAccepted();
+			unsubRejected();
+			unsubFollowRequest();
+			unsubAcceptedSelf();
+		};
 	}, [userId]);
 
 	const loadProfile = async () => {
@@ -37,13 +166,7 @@ function UserProfilePage({ client, session }) {
 		setError("");
 		try {
 			const data = await getUserProfile(client, session, userId);
-			console.log("🔍 Profile data received:", {
-				username: data.username,
-				isFriend: data.isFriend,
-				isFollowing: data.isFollowing,
-				isFollowedBy: data.isFollowedBy,
-				hasPendingRequest: data.hasPendingRequest,
-			});
+			console.log("🔍 Profile data received:", data);
 			setProfile(data);
 		} catch (err) {
 			console.error("Load profile error:", err);
@@ -53,479 +176,281 @@ function UserProfilePage({ client, session }) {
 		}
 	};
 
-	const formatDate = (timestamp) => {
+	const formatJoinDate = (timestamp) => {
 		if (!timestamp) return "Unknown";
 		const date = new Date(timestamp * 1000);
-		return date.toLocaleDateString("en-US", {
-			year: "numeric",
-			month: "long",
-			day: "numeric",
-		});
+		const day = date.getDate();
+		const month = date.toLocaleString("en-US", { month: "short" });
+		const year = date.getFullYear();
+		return `${day} ${month} ${year}`;
 	};
 
-	const formatLastSeen = (timestamp) => {
-		if (!timestamp) return "Never";
-		const now = Date.now();
-		const lastSeen = timestamp * 1000;
-		const diff = now - lastSeen;
-
-		const minutes = Math.floor(diff / 60000);
-		const hours = Math.floor(diff / 3600000);
-		const days = Math.floor(diff / 86400000);
-
-		if (minutes < 1) return "Just now";
-		if (minutes < 60) return `${minutes}m ago`;
-		if (hours < 24) return `${hours}h ago`;
-		return `${days}d ago`;
-	};
-
-	const handleSendFollowRequest = async () => {
+	// Handle follow button
+	const handleFollow = async () => {
+		if (actionLoading) return;
 		setActionLoading(true);
-		setError("");
-		setSuccess("");
 		try {
-			await sendFollowRequest(client, session, userId);
-			setSuccess("Follow request sent!");
-			// Reload profile to update status
-			await loadProfile();
+			if (followStatus === "following") {
+				await unfollow(client, session, userId);
+				setFollowStatus("none");
+				// Update profile counts - you unfollowed this user
+				setProfile((prev) =>
+					prev
+						? {
+								...prev,
+								followersCount: Math.max(0, (prev.followersCount || 0) - 1),
+						  }
+						: prev
+				);
+			} else if (followStatus === "pending") {
+				await cancelFollowRequest(client, session, userId);
+				setFollowStatus("none");
+			} else {
+				await sendFollowRequest(client, session, userId);
+				setFollowStatus("pending");
+			}
 		} catch (err) {
-			setError(err.message || "Failed to send follow request");
+			console.error("Follow action failed:", err);
 		} finally {
 			setActionLoading(false);
 		}
 	};
 
-	const handleCancelFollowRequest = async () => {
+	// Handle send message - navigate to DM or new conversation
+	const handleSendMessage = async () => {
+		if (actionLoading) return;
 		setActionLoading(true);
-		setError("");
-		setSuccess("");
 		try {
-			await cancelFollowRequest(client, session, userId);
-			setSuccess("Follow request cancelled");
-			// Reload profile to update status
-			await loadProfile();
+			// Check if a channel already exists with this user
+			const result = await getChannels(client, session);
+			const existingChannel = (result.channels || []).find((ch) => {
+				if (ch.channelType !== "direct") return false;
+				return (ch.participantIds || []).includes(userId);
+			});
+
+			if (existingChannel) {
+				// Navigate to existing channel
+				navigate(`/chat/${existingChannel.channelId}`);
+			} else {
+				// Navigate to new conversation page - channel will be created on first message
+				navigate(`/chat/new/${userId}`);
+			}
 		} catch (err) {
-			setError(err.message || "Failed to cancel follow request");
+			console.error("Failed to start conversation:", err);
+			// Fallback to new conversation page
+			navigate(`/chat/new/${userId}`);
 		} finally {
 			setActionLoading(false);
 		}
 	};
 
-	const handleUnfollow = async () => {
-		if (!window.confirm("Are you sure you want to unfollow this user?")) {
-			return;
-		}
-		setActionLoading(true);
-		setError("");
-		setSuccess("");
-		try {
-			await unfollow(client, session, userId);
-			setSuccess("Unfollowed successfully");
-			// Reload profile to update status
-			await loadProfile();
-		} catch (err) {
-			setError(err.message || "Failed to unfollow");
-		} finally {
-			setActionLoading(false);
-		}
-	};
-
-	const handleRemoveFollower = async () => {
-		if (
-			!window.confirm(
-				"Are you sure you want to remove this follower? They will no longer see your followers-only posts."
-			)
-		) {
-			return;
-		}
-		setActionLoading(true);
-		setError("");
-		setSuccess("");
-		try {
-			// To remove a follower, we call unfollow with their ID
-			// This removes the follow relationship from our side
-			// In Nakama's friend system, this removes them from our followers list
-			await unfollow(client, session, userId);
-			setSuccess("Follower removed successfully");
-			// Reload profile to update status
-			await loadProfile();
-		} catch (err) {
-			setError(err.message || "Failed to remove follower");
-		} finally {
-			setActionLoading(false);
-		}
-	};
-
+	// Loading state
 	if (loading) {
 		return (
-			<div className="profile-page">
-				<div className="loading-container">
-					<div className="spinner"></div>
-					<p>Loading profile...</p>
-				</div>
+			<div className="profile-loading">
+				<div className="profile-spinner"></div>
+				<p>Loading profile...</p>
 			</div>
 		);
 	}
 
-	if (error) {
+	// Error state
+	if (error || !profile) {
 		return (
-			<div className="profile-page">
-				<div className="error-container">
-					<p className="error-message">{error}</p>
-					<button onClick={() => navigate(-1)} className="back-btn">
-						Go Back
-					</button>
-				</div>
+			<div className="profile-error">
+				<div className="profile-error-icon">😕</div>
+				<h3>{error || "Profile not found"}</h3>
+				<p>We couldn't load this profile. Please try again.</p>
+				<button className="profile-error-btn" onClick={() => navigate(-1)}>
+					Go Back
+				</button>
 			</div>
 		);
 	}
 
-	if (!profile) {
-		return (
-			<div className="profile-page">
-				<div className="error-container">
-					<p>Profile not found</p>
-					<button onClick={() => navigate(-1)} className="back-btn">
-						Go Back
-					</button>
-				</div>
-			</div>
-		);
-	}
+	// Get follow button text
+	const getFollowButtonText = () => {
+		if (actionLoading) return "...";
+		if (followStatus === "following") return "Unfollow";
+		if (followStatus === "pending") return "Requested";
+		return "Follow";
+	};
 
-	const isOwnProfile = session?.user_id === userId;
-	const canViewPrivateInfo = isOwnProfile || profile.isFriend;
+	// Get content based on active tab
+	const getTabContent = () => {
+		switch (activeTab) {
+			case "posts":
+				return posts.length > 0 ? (
+					<div className="posts-grid">
+						{posts.map((item) => (
+							<div key={item.id} className="post-item">
+								<img src={item.url} alt="Post" />
+							</div>
+						))}
+					</div>
+				) : (
+					<div className="tab-empty">
+						<div className="tab-empty-icon">📷</div>
+						<h3>No posts yet</h3>
+						<p>Posts will appear here</p>
+					</div>
+				);
+			case "stats":
+				return (
+					<div className="tab-empty">
+						<div className="tab-empty-icon">📊</div>
+						<h3>Stats</h3>
+						<p>User statistics will appear here</p>
+					</div>
+				);
+			case "collection":
+				return (
+					<div className="tab-empty">
+						<div className="tab-empty-icon">🎮</div>
+						<h3>Collection</h3>
+						<p>Game collection will appear here</p>
+					</div>
+				);
+			case "wishlist":
+				return (
+					<div className="tab-empty">
+						<div className="tab-empty-icon">⭐</div>
+						<h3>Wishlist</h3>
+						<p>Wishlist items will appear here</p>
+					</div>
+				);
+			default:
+				return null;
+		}
+	};
 
 	return (
-		<div className="profile-page">
+		<div className="user-profile-page">
 			{/* Header */}
-			<div className="profile-header">
-				<button onClick={() => navigate(-1)} className="back-button">
-					← Back
+			<div className="user-profile-header">
+				<button className="back-btn-circle" onClick={() => navigate(-1)}>
+					‹
 				</button>
-				<h1>User Profile</h1>
+				<button className="menu-btn" onClick={() => {}}>
+					⋮
+				</button>
 			</div>
-
-			{/* Error/Success Messages */}
-			{error && <div className="error-message">{error}</div>}
-			{success && <div className="success-message">{success}</div>}
 
 			{/* Profile Card */}
-			<div className="profile-card">
-				{/* Avatar and Basic Info */}
-				<div className="profile-basic">
-					<div className="avatar-container">
+			<div className="user-profile-card">
+				<div className="profile-avatar-container">
+					{profile.avatarUrl ? (
 						<img
-							src={profile.avatarUrl || "/default-avatar.png"}
+							src={profile.avatarUrl}
 							alt={profile.username}
-							className="profile-avatar"
+							className="profile-avatar-img"
 						/>
-						{profile.isOnline && <span className="online-indicator"></span>}
-					</div>
-					<div className="profile-info">
-						<h2 className="profile-username">{profile.username}</h2>
-						<p className="profile-displayname">{profile.displayName}</p>
-						{profile.bio && <p className="profile-bio">{profile.bio}</p>}
-						<div className="profile-meta">
-							<span className="meta-item">
-								{profile.isOnline ? (
-									<span className="status-online">● Online</span>
-								) : (
-									<span className="status-offline">
-										Last seen {formatLastSeen(profile.lastSeenAt)}
-									</span>
-								)}
-							</span>
-							<span className="meta-item">
-								Joined {formatDate(profile.createdAt)}
-							</span>
+					) : (
+						<div className="profile-avatar-placeholder">
+							{(profile.username || "U")[0].toUpperCase()}
 						</div>
+					)}
+					{profile.isOnline && <div className="online-indicator"></div>}
+				</div>
+
+				<div className="profile-user-info">
+					<h2 className="profile-display-name">
+						{profile.displayName || profile.username}
+					</h2>
+					<p className="profile-username">@{profile.username}</p>
+					<div className="profile-badges">
+						{profile.country && (
+							<span className="badge country-badge">
+								{getCountryFlag(profile.country)} {profile.country}
+							</span>
+						)}
+						<span className="badge join-badge">
+							📅 Joined {formatJoinDate(profile.createdAt)}
+						</span>
 					</div>
 				</div>
 
-				{/* Stats - Always Visible */}
+				{/* Stats Section */}
 				<div className="profile-stats">
 					<div className="stat-item">
-						<span className="stat-value">{profile.postsCount}</span>
-						<span className="stat-label">Posts</span>
-					</div>
-					<div
-						className="stat-item clickable"
-						onClick={() => canViewPrivateInfo && setShowFollowersModal(true)}
-						style={{ cursor: canViewPrivateInfo ? "pointer" : "default" }}
-					>
-						<span className="stat-value">{profile.followersCount}</span>
-						<span className="stat-label">Followers</span>
-					</div>
-					<div
-						className="stat-item clickable"
-						onClick={() => canViewPrivateInfo && setShowFollowingModal(true)}
-						style={{ cursor: canViewPrivateInfo ? "pointer" : "default" }}
-					>
-						<span className="stat-value">{profile.followingCount}</span>
-						<span className="stat-label">Following</span>
-					</div>
-					<div
-						className={`stat-item ${
-							(isOwnProfile || profile.isFriend) && profile.friendsCount > 0
-								? "clickable"
-								: ""
-						}`}
-						onClick={() => {
-							if (
-								(isOwnProfile || profile.isFriend) &&
-								profile.friendsCount > 0
-							) {
-								setShowFriendsModal(true);
-							}
-						}}
-					>
-						<span className="stat-value">{profile.friendsCount}</span>
+						<span className="stat-value">{profile.friendsCount || 0}</span>
 						<span className="stat-label">Friends</span>
 					</div>
+					<div className="stat-item">
+						<span className="stat-value">{profile.followersCount || 0}</span>
+						<span className="stat-label">Followers</span>
+					</div>
+					<div className="stat-item">
+						<span className="stat-value">{profile.followingCount || 0}</span>
+						<span className="stat-label">Following</span>
+					</div>
+					<div className="stat-item">
+						<span className="stat-value">{profile.totalWins || 0}</span>
+						<span className="stat-label">Total Wins</span>
+					</div>
 				</div>
 
-				{/* Relationship Status */}
-				{!isOwnProfile && (
-					<div className="relationship-status">
-						{profile.isFriend && (
-							<span className="badge badge-friend">🤝 Friends</span>
-						)}
-						{profile.isFollowing && !profile.isFriend && (
-							<span className="badge badge-following">👥 Following</span>
-						)}
-						{profile.hasPendingRequest && !profile.isFollowing && (
-							<span className="badge badge-pending">⏳ Pending</span>
-						)}
-						{!profile.isFollowing &&
-							!profile.isFriend &&
-							!profile.hasPendingRequest && (
-								<span className="badge badge-none">Not Following</span>
-							)}
-					</div>
-				)}
+				{/* Bio Section */}
+				<div className="profile-bio-section">
+					<h3 className="bio-title">Bio</h3>
+					<p className="bio-text">{profile.bio || "No bio yet"}</p>
+				</div>
 
 				{/* Action Buttons */}
-				{!isOwnProfile && (
-					<div className="profile-actions">
-						{/* Primary action button: Follow/Following/Requested */}
-						{profile.isFollowing ? (
-							<button
-								onClick={handleUnfollow}
-								disabled={actionLoading}
-								className="btn-following"
-							>
-								{actionLoading ? "Processing..." : "Following"}
-							</button>
-						) : profile.hasPendingRequest ? (
-							<button
-								onClick={handleCancelFollowRequest}
-								disabled={actionLoading}
-								className="btn-pending"
-							>
-								{actionLoading ? "Processing..." : "Requested"}
-							</button>
-						) : (
-							<button
-								onClick={handleSendFollowRequest}
-								disabled={actionLoading}
-								className="btn-follow"
-							>
-								{actionLoading ? "Processing..." : "Follow"}
-							</button>
-						)}
-
-						{/* Remove Follower button - shown when this user is following you */}
-						{profile.isFollowedBy && (
-							<button
-								onClick={handleRemoveFollower}
-								disabled={actionLoading}
-								className="btn-remove-follower"
-								title="Remove this follower"
-							>
-								{actionLoading ? "Processing..." : "Remove Follower"}
-							</button>
-						)}
-					</div>
-				)}
+				<div className="profile-action-buttons">
+					<button
+						className={`action-btn follow-btn ${
+							followStatus !== "none" ? "active" : ""
+						}`}
+						onClick={handleFollow}
+						disabled={actionLoading}
+					>
+						<span className="btn-icon">👤</span>
+						<span className="btn-text">{getFollowButtonText()}</span>
+					</button>
+					<button
+						className="action-btn message-btn"
+						onClick={handleSendMessage}
+						disabled={actionLoading}
+					>
+						<span className="btn-icon">✏️</span>
+						<span className="btn-text">Send Message</span>
+					</button>
+				</div>
 			</div>
 
-			{/* Private Content - Only for Friends or Owner */}
-			{canViewPrivateInfo ? (
-				<div className="profile-content">
-					{/* Tabs */}
-					<div className="tabs">
-						<button
-							className={activeTab === "posts" ? "tab active" : "tab"}
-							onClick={() => setActiveTab("posts")}
-						>
-							Posts ({profile.posts?.length || 0})
-						</button>
-						<button
-							className={activeTab === "followers" ? "tab active" : "tab"}
-							onClick={() => setActiveTab("followers")}
-						>
-							Followers ({profile.followers?.length || 0})
-						</button>
-						<button
-							className={activeTab === "following" ? "tab active" : "tab"}
-							onClick={() => setActiveTab("following")}
-						>
-							Following ({profile.following?.length || 0})
-						</button>
-					</div>
+			{/* Content Tabs */}
+			<div className="content-tabs">
+				<button
+					className={`content-tab ${activeTab === "posts" ? "active" : ""}`}
+					onClick={() => setActiveTab("posts")}
+				>
+					Posts
+				</button>
+				<button
+					className={`content-tab ${activeTab === "stats" ? "active" : ""}`}
+					onClick={() => setActiveTab("stats")}
+				>
+					My Stats
+				</button>
+				<button
+					className={`content-tab ${
+						activeTab === "collection" ? "active" : ""
+					}`}
+					onClick={() => setActiveTab("collection")}
+				>
+					My Collection
+				</button>
+				<button
+					className={`content-tab ${activeTab === "wishlist" ? "active" : ""}`}
+					onClick={() => setActiveTab("wishlist")}
+				>
+					Wishlist
+				</button>
+			</div>
 
-					{/* Tab Content */}
-					<div className="tab-content">
-						{activeTab === "posts" && (
-							<div className="posts-list">
-								{profile.posts && profile.posts.length > 0 ? (
-									profile.posts.map((post) => (
-										<div key={post.postId} className="post-card">
-											<div className="post-header">
-												<img
-													src={post.avatarUrl || "/default-avatar.png"}
-													alt={post.username}
-													className="post-avatar"
-												/>
-												<div className="post-info">
-													<span className="post-username">{post.username}</span>
-													<span className="post-time">
-														{formatDate(post.createdAt)}
-													</span>
-												</div>
-												<span
-													className={`post-visibility visibility-${post.visibility}`}
-												>
-													{post.visibility === "public" && "🌍 Public"}
-													{post.visibility === "friends" && "👥 Friends"}
-													{post.visibility === "private" && "🔒 Private"}
-												</span>
-											</div>
-											<div className="post-content">{post.content}</div>
-											<div className="post-stats">
-												<span>❤️ {post.likesCount}</span>
-												<span>💬 {post.commentsCount}</span>
-												<span>🔄 {post.sharesCount}</span>
-											</div>
-										</div>
-									))
-								) : (
-									<div className="empty-state">
-										<p>No posts yet</p>
-									</div>
-								)}
-							</div>
-						)}
-
-						{activeTab === "followers" && (
-							<div className="users-list">
-								{profile.followers && profile.followers.length > 0 ? (
-									profile.followers.map((user) => (
-										<div
-											key={user.userId}
-											className="user-card"
-											onClick={() => navigate(`/profile/${user.userId}`)}
-										>
-											<img
-												src={user.avatarUrl || "/default-avatar.png"}
-												alt={user.username}
-												className="user-avatar"
-											/>
-											<div className="user-info">
-												<span className="user-username">{user.username}</span>
-												<span className="user-displayname">
-													{user.displayName}
-												</span>
-											</div>
-											{user.isFriend && (
-												<span className="badge badge-friend-small">
-													Friends
-												</span>
-											)}
-										</div>
-									))
-								) : (
-									<div className="empty-state">
-										<p>No followers yet</p>
-									</div>
-								)}
-							</div>
-						)}
-
-						{activeTab === "following" && (
-							<div className="users-list">
-								{profile.following && profile.following.length > 0 ? (
-									profile.following.map((user) => (
-										<div
-											key={user.userId}
-											className="user-card"
-											onClick={() => navigate(`/profile/${user.userId}`)}
-										>
-											<img
-												src={user.avatarUrl || "/default-avatar.png"}
-												alt={user.username}
-												className="user-avatar"
-											/>
-											<div className="user-info">
-												<span className="user-username">{user.username}</span>
-												<span className="user-displayname">
-													{user.displayName}
-												</span>
-											</div>
-											{user.isFriend && (
-												<span className="badge badge-friend-small">
-													Friends
-												</span>
-											)}
-										</div>
-									))
-								) : (
-									<div className="empty-state">
-										<p>Not following anyone yet</p>
-									</div>
-								)}
-							</div>
-						)}
-					</div>
-				</div>
-			) : (
-				<div className="private-content-locked">
-					<div className="lock-icon">🔒</div>
-					<h3>Private Content</h3>
-					<p>
-						Only friends can see {profile.username}'s posts and connections.
-					</p>
-					<p className="hint">Send a follow request to connect!</p>
-				</div>
-			)}
-
-			{/* Followers Modal */}
-			<FollowersModal
-				isOpen={showFollowersModal}
-				onClose={() => setShowFollowersModal(false)}
-				users={profile?.followers || []}
-				title="Followers"
-				currentUserId={session?.user_id}
-			/>
-
-			{/* Following Modal */}
-			<FollowersModal
-				isOpen={showFollowingModal}
-				onClose={() => setShowFollowingModal(false)}
-				users={profile?.following || []}
-				title="Following"
-				currentUserId={session?.user_id}
-			/>
-
-			{/* Friends Modal */}
-			<FollowersModal
-				isOpen={showFriendsModal}
-				onClose={() => setShowFriendsModal(false)}
-				users={profile?.friends || []}
-				title="Friends"
-				currentUserId={session?.user_id}
-			/>
+			{/* Tab Content */}
+			<div className="tab-content">{getTabContent()}</div>
 		</div>
 	);
 }

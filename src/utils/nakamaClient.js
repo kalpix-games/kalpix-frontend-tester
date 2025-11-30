@@ -4,6 +4,25 @@
  */
 
 /**
+ * Timeout wrapper for promises - fails fast if network is slow/offline
+ * @param {Promise} promise - The promise to wrap
+ * @param {number} ms - Timeout in milliseconds
+ * @param {string} operation - Name of the operation for error message
+ * @returns {Promise} Promise that rejects if timeout is exceeded
+ */
+function withTimeout(promise, ms = 10000, operation = "Operation") {
+	return Promise.race([
+		promise,
+		new Promise((_, reject) =>
+			setTimeout(
+				() => reject(new Error(`${operation} timed out after ${ms}ms`)),
+				ms
+			)
+		),
+	]);
+}
+
+/**
  * Send game action to server
  * @param {object} socket - Nakama socket
  * @param {string} matchId - Match ID
@@ -688,6 +707,60 @@ export async function declineDMRequest(client, session, channelId) {
 	return parseRpcResponse(response);
 }
 
+/**
+ * Block a DM sender and delete the request
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID of the request
+ * @returns {object} Response
+ */
+export async function blockDMSender(client, session, channelId) {
+	const response = await client.rpc(session, "chat/block_dm_sender", {
+		channel_id: channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Delete a DM request (without blocking)
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID of the request
+ * @returns {object} Response
+ */
+export async function deleteDMRequest(client, session, channelId) {
+	const response = await client.rpc(session, "chat/delete_dm_request", {
+		channel_id: channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Delete all DM requests
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Response
+ */
+export async function deleteAllDMRequests(client, session) {
+	const response = await client.rpc(session, "chat/delete_all_dm_requests", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get hidden request channels
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @returns {object} Hidden channels
+ */
+export async function getHiddenRequestChannels(client, session) {
+	const response = await client.rpc(
+		session,
+		"chat/get_hidden_request_channels",
+		{}
+	);
+	return parseRpcResponse(response);
+}
+
 export async function getStoryTray(client, session) {
 	const response = await client.rpc(session, "social/get_story_tray", {});
 	return parseRpcResponse(response);
@@ -784,13 +857,51 @@ export async function createChannel(
 }
 
 /**
- * Get user's channels
+ * Get user's inbox channels (excludes pending incoming requests)
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @returns {object} Channels list
  */
 export async function getChannels(client, session) {
-	const response = await client.rpc(session, "chat/get_channels", {});
+	const response = await client.rpc(session, "chat/get_inbox_channels", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get a single channel by ID
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID
+ * @returns {object} Channel info
+ */
+export async function getChannelInfo(client, session, channelId) {
+	const response = await client.rpc(session, "chat/get_channel", {
+		channel_id: channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get messages for a channel
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} channelId - Channel ID
+ * @param {number} limit - Number of messages to fetch
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Messages list
+ */
+export async function getChannelMessages(
+	client,
+	session,
+	channelId,
+	limit = 50,
+	cursor = ""
+) {
+	const response = await client.rpc(session, "chat/get_messages", {
+		channel_id: channelId,
+		limit: limit,
+		cursor: cursor,
+	});
 	return parseRpcResponse(response);
 }
 
@@ -814,6 +925,11 @@ export async function sendChatMessage(
 	mediaURL = "",
 	replyToId = ""
 ) {
+	// Check network status before sending
+	if (!navigator.onLine) {
+		throw new Error("Network offline - message queued for later");
+	}
+
 	const payload = {
 		channel_id: channelId,
 		content,
@@ -823,7 +939,13 @@ export async function sendChatMessage(
 	if (replyToId) {
 		payload.reply_to_id = replyToId;
 	}
-	const response = await client.rpc(session, "chat/send_message", payload);
+
+	// Use timeout to fail fast if network is slow/unstable
+	const response = await withTimeout(
+		client.rpc(session, "chat/send_message", payload),
+		10000, // 10 second timeout
+		"Send message"
+	);
 	return parseRpcResponse(response);
 }
 
@@ -884,6 +1006,22 @@ export async function markMessageRead(client, session, channelId, messageId) {
 	const response = await client.rpc(session, "chat/mark_read", {
 		channel_id: channelId,
 		message_id: messageId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Mark multiple messages as read (bulk)
+ * @param {Client} client - Nakama client
+ * @param {Session} session - User session
+ * @param {string} channelId - Channel ID
+ * @param {string[]} messageIds - Array of message IDs
+ * @returns {object} Response with marked_count
+ */
+export async function markMessagesRead(client, session, channelId, messageIds) {
+	const response = await client.rpc(session, "chat/mark_messages_read", {
+		channel_id: channelId,
+		message_ids: messageIds,
 	});
 	return parseRpcResponse(response);
 }
@@ -1065,4 +1203,364 @@ function parseRpcResponse(response) {
 
 	// Return the data field if it exists, otherwise return the whole payload
 	return data.data || data;
+}
+
+// ========================================
+// MEDIA UPLOAD
+// ========================================
+
+/**
+ * Upload media file for chat (base64 encoded)
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} mediaType - Media type: 'image', 'video', 'audio', 'document'
+ * @param {string} fileName - Original file name
+ * @param {string} fileData - Base64-encoded file contents (no data: prefix)
+ * @returns {object} MediaUpload record containing fileUrl
+ */
+export async function uploadChatMedia(
+	client,
+	session,
+	mediaType,
+	fileName,
+	fileData
+) {
+	const response = await client.rpc(session, "chat/upload_media", {
+		media_type: mediaType,
+		file_name: fileName,
+		file_data: fileData,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get a presigned URL for direct upload to S3
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} mediaType - Media type: 'image', 'video', 'audio', 'document'
+ * @param {string} fileName - Original file name
+ * @returns {object} Object containing upload_url, media_type, file_name
+ */
+export async function getPresignedUploadUrl(
+	client,
+	session,
+	mediaType,
+	fileName
+) {
+	const response = await client.rpc(session, "chat/get_presigned_url", {
+		media_type: mediaType,
+		file_name: fileName,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// MESSAGE FEATURES (Forward, Search, Pin)
+// ========================================
+
+/**
+ * Forward a message to another channel
+ */
+export async function forwardMessage(
+	client,
+	session,
+	messageId,
+	targetChannelId
+) {
+	const response = await client.rpc(session, "chat/forward_message", {
+		messageId,
+		targetChannelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Search messages in a channel
+ */
+export async function searchMessages(
+	client,
+	session,
+	channelId,
+	query,
+	limit = 20
+) {
+	const response = await client.rpc(session, "chat/search_messages", {
+		channelId,
+		query,
+		limit,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Pin a message in a channel
+ */
+export async function pinMessage(client, session, channelId, messageId) {
+	const response = await client.rpc(session, "chat/pin_message", {
+		channelId,
+		messageId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Unpin a message in a channel
+ */
+export async function unpinMessage(client, session, channelId, messageId) {
+	const response = await client.rpc(session, "chat/unpin_message", {
+		channelId,
+		messageId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get all pinned messages in a channel
+ */
+export async function getPinnedMessages(client, session, channelId) {
+	const response = await client.rpc(session, "chat/get_pinned_messages", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// CHAT MANAGEMENT (Mute, Archive, Clear, Report)
+// ========================================
+
+/**
+ * Mute a channel
+ */
+export async function muteChannel(client, session, channelId, mutedUntil = 0) {
+	const response = await client.rpc(session, "chat/mute_channel", {
+		channelId,
+		mutedUntil,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Unmute a channel
+ */
+export async function unmuteChannel(client, session, channelId) {
+	const response = await client.rpc(session, "chat/unmute_channel", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Archive a channel
+ */
+export async function archiveChannel(client, session, channelId) {
+	const response = await client.rpc(session, "chat/archive_channel", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Unarchive a channel
+ */
+export async function unarchiveChannel(client, session, channelId) {
+	const response = await client.rpc(session, "chat/unarchive_channel", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get archived channels
+ */
+export async function getArchivedChannels(client, session) {
+	const response = await client.rpc(session, "chat/get_archived_channels", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Clear chat history
+ */
+export async function clearChatHistory(client, session, channelId) {
+	const response = await client.rpc(session, "chat/clear_history", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Report a message
+ */
+export async function reportMessage(
+	client,
+	session,
+	channelId,
+	messageId,
+	reason,
+	description = ""
+) {
+	const response = await client.rpc(session, "chat/report_message", {
+		channelId,
+		messageId,
+		reason,
+		description,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get channel settings
+ */
+export async function getChannelSettings(client, session, channelId) {
+	const response = await client.rpc(session, "chat/get_channel_settings", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// GROUP MANAGEMENT
+// ========================================
+
+/**
+ * Create a group channel
+ */
+export async function createGroupChannel(
+	client,
+	session,
+	name,
+	description,
+	iconUrl,
+	participantIds
+) {
+	const response = await client.rpc(session, "chat/create_group", {
+		name,
+		description,
+		iconUrl,
+		participantIds,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Add a member to a group
+ */
+export async function addGroupMember(client, session, channelId, newMemberId) {
+	const response = await client.rpc(session, "chat/add_group_member", {
+		channelId,
+		newMemberId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Remove a member from a group
+ */
+export async function removeGroupMember(client, session, channelId, memberId) {
+	const response = await client.rpc(session, "chat/remove_group_member", {
+		channelId,
+		memberId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Promote a member to admin
+ */
+export async function promoteToAdmin(client, session, channelId, memberId) {
+	const response = await client.rpc(session, "chat/promote_to_admin", {
+		channelId,
+		memberId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Demote an admin to regular member
+ */
+export async function demoteFromAdmin(client, session, channelId, adminId) {
+	const response = await client.rpc(session, "chat/demote_from_admin", {
+		channelId,
+		adminId,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Update group info
+ */
+export async function updateGroupInfo(
+	client,
+	session,
+	channelId,
+	name,
+	description,
+	iconUrl
+) {
+	const response = await client.rpc(session, "chat/update_group_info", {
+		channelId,
+		name,
+		description,
+		iconUrl,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Leave a group
+ */
+export async function leaveGroup(client, session, channelId) {
+	const response = await client.rpc(session, "chat/leave_group", {
+		channelId,
+	});
+	return parseRpcResponse(response);
+}
+
+// ========================================
+// Message Status Sync Functions
+// ========================================
+
+/**
+ * Get pending (undelivered) messages for the current user
+ * Called when user comes online to retrieve missed messages
+ */
+export async function getPendingMessages(client, session) {
+	const response = await client.rpc(session, "chat/get_pending_messages", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Sync and deliver all pending messages
+ * Marks all pending messages as delivered and notifies senders
+ * Called when user comes online
+ */
+export async function syncAndDeliverPendingMessages(client, session) {
+	const response = await client.rpc(session, "chat/sync_and_deliver", {});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Sync the status of specific messages sent by the user
+ * @param {string[]} messageIds - Array of message IDs to check
+ */
+export async function syncSentMessageStatus(client, session, messageIds) {
+	const response = await client.rpc(session, "chat/sync_message_status", {
+		message_ids: messageIds,
+	});
+	return parseRpcResponse(response);
+}
+
+/**
+ * Sync all sent message status since a timestamp
+ * Used for full sync after reconnection
+ * @param {number} sinceTimestamp - Unix timestamp (0 for all recent)
+ */
+export async function syncAllSentMessageStatus(
+	client,
+	session,
+	sinceTimestamp = 0
+) {
+	const response = await client.rpc(session, "chat/sync_all_message_status", {
+		since_timestamp: sinceTimestamp,
+	});
+	return parseRpcResponse(response);
 }
