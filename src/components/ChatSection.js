@@ -244,7 +244,9 @@ function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
 		if (session && activeTab === "channels") {
 			loadChannels(channelView);
 		}
-	}, [session, activeTab]);
+		// loadChannels is stable, only re-run when session/activeTab/channelView changes
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [session, activeTab, channelView]);
 
 	// Auto-select channel if initialChannelId is provided
 	useEffect(() => {
@@ -295,6 +297,7 @@ function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
 			unsubNewChannel();
 			unsubPresence();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [channelView]);
 
 	// Load messages when channel is selected
@@ -302,6 +305,7 @@ function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
 		if (selectedChannel) {
 			loadMessages(selectedChannel.channelId);
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [selectedChannel]);
 
 	// Auto-scroll to bottom when new messages arrive
@@ -559,6 +563,7 @@ function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
 				remoteTypingTimeoutRef.current = null;
 			}
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [session, selectedChannel]);
 
 	useEffect(() => {
@@ -908,7 +913,7 @@ function ChatSection({ client, session, socket, onEvent, initialChannelId }) {
 				.split(",")
 				.map((id) => id.trim())
 				.filter((id) => id);
-			const result = await createChannel(
+			await createChannel(
 				client,
 				session,
 				channelType,

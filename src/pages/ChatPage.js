@@ -64,7 +64,7 @@ function ChatPage({ client, session, onSelectChannel }) {
 		y: 0,
 	});
 	const [archivedChannels, setArchivedChannels] = useState([]);
-	const [showArchived, setShowArchived] = useState(false);
+	const [, setShowArchived] = useState(false);
 
 	// Load channels based on active tab
 	const loadChannels = useCallback(async () => {
@@ -101,6 +101,7 @@ function ChatPage({ client, session, onSelectChannel }) {
 		} finally {
 			setLoading(false);
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [client, session, activeTab]);
 
 	// Fetch online statuses
@@ -521,6 +522,7 @@ function ChatPage({ client, session, onSelectChannel }) {
 		if (client && session) {
 			loadArchivedChannels();
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [client, session]);
 
 	// Close context menu when clicking outside

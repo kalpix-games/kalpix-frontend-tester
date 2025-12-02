@@ -65,11 +65,6 @@ function AuthTester({
 		confirmPassword: "",
 	});
 
-	// Google login state
-	const [googleForm, setGoogleForm] = useState({
-		idToken: "",
-	});
-
 	// Account linking state
 	const [linkForm, setLinkForm] = useState({
 		email: "",

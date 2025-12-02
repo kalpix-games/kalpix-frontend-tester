@@ -65,7 +65,7 @@ function MessageRequestPage({ client, session }) {
 	const { decrementDmRequestCount } = useNotifications();
 	const messagesEndRef = useRef(null);
 
-	const [channel, setChannel] = useState(null);
+	const [, setChannel] = useState(null);
 	const [messages, setMessages] = useState([]);
 	const [loading, setLoading] = useState(true);
 	const [otherUser, setOtherUser] = useState(null);

@@ -11,7 +11,6 @@ import {
 	postStory,
 	uploadStoryMedia,
 	getStoryTray,
-	getUserStories,
 	viewStory,
 	getStoryViewers,
 	replyToStory,
@@ -26,7 +25,7 @@ import {
  * Displays Feed (posts from followed users) and News (official announcements)
  */
 function SocialPage({ client, session, socket, isConnected }) {
-	const { notifications } = useNotifications();
+	useNotifications(); // Subscribe to notifications context
 	const [activeTab, setActiveTab] = useState("feed"); // 'feed' or 'news'
 	const [feedType, setFeedType] = useState("discover"); // 'foryou' or 'discover'
 	const [posts, setPosts] = useState([]);
@@ -68,6 +67,7 @@ function SocialPage({ client, session, socket, isConnected }) {
 		loadFeed();
 		loadNews();
 		loadStoryTray();
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
 	// Reload feed when feed type changes
@@ -75,6 +75,7 @@ function SocialPage({ client, session, socket, isConnected }) {
 		if (activeTab === "feed") {
 			loadFeed();
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [feedType]);
 
 	// Subscribe to real-time events
@@ -135,6 +136,7 @@ function SocialPage({ client, session, socket, isConnected }) {
 			unsubPostLike();
 			unsubPostComment();
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeTab, feedType, selectedPost]);
 
 	// Load feed posts based on feed type

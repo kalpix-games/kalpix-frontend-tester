@@ -58,6 +58,7 @@ function removeFromOfflineQueue(tempId) {
 	saveOfflineQueue(filtered);
 }
 
+// eslint-disable-next-line no-unused-vars
 function clearOfflineQueueForChannel(channelId) {
 	const queue = getOfflineQueue();
 	const filtered = queue.filter((m) => m.channelId !== channelId);
@@ -171,7 +172,7 @@ function ChatConversationPage({ client, session, socket }) {
 	const [typingUser, setTypingUser] = useState(null);
 
 	// Message action states
-	const [selectedMessage, setSelectedMessage] = useState(null);
+	const [, setSelectedMessage] = useState(null);
 	const [showReactionPicker, setShowReactionPicker] = useState(null);
 	const [editingMessage, setEditingMessage] = useState(null);
 	const [editContent, setEditContent] = useState("");
@@ -183,7 +184,7 @@ function ChatConversationPage({ client, session, socket }) {
 	const [showPinnedMessages, setShowPinnedMessages] = useState(false);
 
 	// Media upload states
-	const [showMediaPicker, setShowMediaPicker] = useState(false);
+	const [, setShowMediaPicker] = useState(false);
 	const [selectedMedia, setSelectedMedia] = useState(null);
 	const [mediaPreview, setMediaPreview] = useState(null);
 	const [uploadingMedia, setUploadingMedia] = useState(false);
@@ -506,8 +507,6 @@ function ChatConversationPage({ client, session, socket }) {
 	useEffect(() => {
 		if (!client || !session || !channelId) return;
 
-		let isMounted = true;
-
 		const joinStream = async () => {
 			try {
 				console.log("🔗 Joining channel stream:", channelId);
@@ -521,7 +520,6 @@ function ChatConversationPage({ client, session, socket }) {
 		joinStream();
 
 		return () => {
-			isMounted = false;
 			// Leave stream when unmounting
 			leaveChannelStream(client, session, channelId).catch((error) => {
 				console.warn("Failed to leave channel stream:", error);
@@ -1069,6 +1067,7 @@ function ChatConversationPage({ client, session, socket }) {
 	};
 
 	// Handle forwarding a message
+	// eslint-disable-next-line no-unused-vars
 	const handleForwardMessage = async (messageId, targetChannelId) => {
 		try {
 			await forwardMessage(client, session, messageId, targetChannelId);
@@ -1197,6 +1196,7 @@ function ChatConversationPage({ client, session, socket }) {
 		if (client && session && channelId) {
 			loadPinnedMessages();
 		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [client, session, channelId]);
 
 	// Group messages by date
@@ -1428,7 +1428,7 @@ function ChatConversationPage({ client, session, socket }) {
 												{msg.messageType === "image" && (
 													<img
 														src={msg.mediaUrl}
-														alt="Shared image"
+														alt="Shared media"
 														className="dm-media-image"
 														onClick={() => window.open(msg.mediaUrl, "_blank")}
 													/>

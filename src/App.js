@@ -40,9 +40,6 @@ function App({
 	const [currentMatch, setCurrentMatch] = useState(null);
 	const myUserIdRef = useRef(null); // ✅ Use ref to avoid closure issues
 
-	// Track if we're using external authentication
-	const usingExternalAuth = externalClient !== null && externalSession !== null;
-
 	// Game state
 	const [gameState, setGameState] = useState({
 		// Match info
@@ -223,6 +220,37 @@ function App({
 		}
 	}, [client, authForm, addEvent, showNotification]);
 
+	// Setup socket event handlers (for standalone mode only)
+	const setupSocketHandlers = useCallback((sock) => {
+		console.log("🔧 Setting up socket event handlers (standalone mode)...");
+
+		// Match data handler
+		sock.onmatchdata = (matchData) => {
+			const parsed = parseMatchData(matchData);
+			if (!parsed) return;
+
+			// Note: handleMatchData is defined later, but this is only used in standalone mode
+			// For external socket mode, we use the inline handler below
+			const { event, data: eventData } = parsed;
+			console.log("📨 Received event (standalone):", event, eventData);
+		};
+
+		// Matchmaker matched
+		sock.onmatchmakermatched = async (matched) => {
+			try {
+				const match = await sock.joinMatch(matched.match_id);
+				setCurrentMatch({ matchId: match.match_id, match });
+				matchIdRef.current = match.match_id; // ✅ Store in ref for reliable access
+				setIsMatchmaking(false);
+				setMatchmakerTicket(null);
+			} catch (error) {
+				console.error("Failed to join match:", error);
+			}
+		};
+
+		console.log("✅ Socket event handlers configured (standalone mode)");
+	}, []);
+
 	// Connect WebSocket
 	const handleConnect = useCallback(async () => {
 		try {
@@ -244,7 +272,7 @@ function App({
 			addEvent("ws_error", `Connection failed: ${error.message}`, "error");
 			showNotification("❌ Connection failed");
 		}
-	}, [client, session, addEvent, showNotification]);
+	}, [client, session, addEvent, showNotification, setupSocketHandlers]);
 
 	// Disconnect WebSocket
 	const handleDisconnect = useCallback(() => {
@@ -255,41 +283,6 @@ function App({
 			addEvent("ws_disconnected", "WebSocket disconnected", "warning");
 		}
 	}, [socket, addEvent]);
-
-	// Setup socket event handlers (for standalone mode only)
-	const setupSocketHandlers = useCallback(
-		(sock) => {
-			console.log("🔧 Setting up socket event handlers (standalone mode)...");
-
-			// Match data handler
-			sock.onmatchdata = (matchData) => {
-				const parsed = parseMatchData(matchData);
-				if (!parsed) return;
-
-				// Note: handleMatchData is defined later, but this is only used in standalone mode
-				// For external socket mode, we use the inline handler below
-				const { event, data: eventData } = parsed;
-				console.log("📨 Received event (standalone):", event, eventData);
-			};
-
-			// Matchmaker matched
-			sock.onmatchmakermatched = async (matched) => {
-				try {
-					const match = await sock.joinMatch(matched.match_id);
-					setCurrentMatch({ matchId: match.match_id, match });
-					matchIdRef.current = match.match_id; // ✅ Store in ref for reliable access
-					setIsMatchmaking(false);
-					setMatchmakerTicket(null);
-				} catch (error) {
-					console.error("Failed to join match:", error);
-				}
-			};
-
-			console.log("✅ Socket event handlers configured (standalone mode)");
-		},
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-		[]
-	);
 
 	// Handle match data events
 	const handleMatchData = useCallback(
@@ -368,6 +361,7 @@ function App({
 		},
 		// ✅ FIX: Don't include handler functions in dependencies
 		// They're already wrapped in useCallback and would cause circular dependency
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 		[addEvent, showNotification]
 	);
 

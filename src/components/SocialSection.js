@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
 	createPost,
 	getUserFeed,
@@ -40,29 +40,8 @@ function SocialSection({ client, session, onEvent }) {
 	const [comments, setComments] = useState({});
 	const [commentInput, setCommentInput] = useState("");
 
-	// Load feed on mount
-	useEffect(() => {
-		if (session && activeTab === "feed") {
-			loadFeed();
-		}
-	}, [session, activeTab]);
-
-	// Load follow requests when component mounts and periodically
-	useEffect(() => {
-		if (session) {
-			// Load immediately
-			loadFollowRequests();
-
-			// Auto-refresh every 10 seconds to check for new requests
-			const interval = setInterval(() => {
-				loadFollowRequests(true); // Silent refresh (no event log)
-			}, 10000);
-
-			return () => clearInterval(interval);
-		}
-	}, [session]);
-
-	const loadFeed = async () => {
+	// Define loadFeed with useCallback
+	const loadFeed = useCallback(async () => {
 		try {
 			setFeedLoading(true);
 			const result = await getUserFeed(client, session, 20);
@@ -77,7 +56,73 @@ function SocialSection({ client, session, onEvent }) {
 		} finally {
 			setFeedLoading(false);
 		}
-	};
+	}, [client, session, onEvent]);
+
+	// Load feed on mount
+	useEffect(() => {
+		if (session && activeTab === "feed") {
+			loadFeed();
+		}
+	}, [session, activeTab, loadFeed]);
+
+	// Define loadFollowRequests with useCallback
+	const loadFollowRequests = useCallback(
+		async (silent = false) => {
+			try {
+				const result = await getFollowRequests(client, session);
+				const requests = result.requests || [];
+				const receivedRequests = requests.filter(
+					(req) =>
+						req.toUserId === session.user_id ||
+						req.to_user_id === session.user_id
+				);
+
+				setFollowRequests(receivedRequests);
+				setUnreadRequestsCount(receivedRequests.length);
+
+				if (!silent) {
+					onEvent(
+						"follow_requests_loaded",
+						`Loaded ${receivedRequests.length} requests`,
+						"info"
+					);
+				}
+
+				// Show notification if there are new requests
+				if (receivedRequests.length > 0 && !silent) {
+					onEvent(
+						"new_follow_requests",
+						`You have ${receivedRequests.length} pending follow request(s)`,
+						"warning"
+					);
+				}
+			} catch (error) {
+				if (!silent) {
+					onEvent(
+						"follow_requests_error",
+						`Failed to load requests: ${error.message}`,
+						"error"
+					);
+				}
+			}
+		},
+		[client, session, onEvent]
+	);
+
+	// Load follow requests when component mounts and periodically
+	useEffect(() => {
+		if (session) {
+			// Load immediately
+			loadFollowRequests();
+
+			// Auto-refresh every 10 seconds to check for new requests
+			const interval = setInterval(() => {
+				loadFollowRequests(true); // Silent refresh (no event log)
+			}, 10000);
+
+			return () => clearInterval(interval);
+		}
+	}, [session, loadFollowRequests]);
 
 	const handleCreatePost = async () => {
 		if (!postContent.trim()) {
@@ -86,12 +131,7 @@ function SocialSection({ client, session, onEvent }) {
 		}
 
 		try {
-			const result = await createPost(
-				client,
-				session,
-				postContent,
-				postMediaURL
-			);
+			await createPost(client, session, postContent, postMediaURL);
 			onEvent("post_created", "Post created successfully", "success");
 			setPostContent("");
 			setPostMediaURL("");
@@ -208,45 +248,6 @@ function SocialSection({ client, session, onEvent }) {
 				`Failed to send follow request: ${error.message}`,
 				"error"
 			);
-		}
-	};
-
-	const loadFollowRequests = async (silent = false) => {
-		try {
-			const result = await getFollowRequests(client, session);
-			const requests = result.requests || [];
-			const receivedRequests = requests.filter(
-				(req) =>
-					req.toUserId === session.user_id || req.to_user_id === session.user_id
-			);
-
-			setFollowRequests(receivedRequests);
-			setUnreadRequestsCount(receivedRequests.length);
-
-			if (!silent) {
-				onEvent(
-					"follow_requests_loaded",
-					`Loaded ${receivedRequests.length} requests`,
-					"info"
-				);
-			}
-
-			// Show notification if there are new requests
-			if (receivedRequests.length > 0 && !silent) {
-				onEvent(
-					"new_follow_requests",
-					`You have ${receivedRequests.length} pending follow request(s)`,
-					"warning"
-				);
-			}
-		} catch (error) {
-			if (!silent) {
-				onEvent(
-					"follow_requests_error",
-					`Failed to load requests: ${error.message}`,
-					"error"
-				);
-			}
 		}
 	};
 

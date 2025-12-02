@@ -9,7 +9,7 @@ import "./Navigation.css";
  */
 function Navigation({ session, onLogout }) {
 	const navigate = useNavigate();
-	const { followRequestCount } = useNotifications();
+	useNotifications(); // Subscribe to notifications context
 
 	return (
 		<nav className="navigation">

@@ -121,6 +121,7 @@ function MainApp() {
 				socket.disconnect();
 			}
 		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [client, session]); // Only reconnect when client or session changes
 
 	// Handle logout
