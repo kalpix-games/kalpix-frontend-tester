@@ -98,16 +98,21 @@ export async function createOrJoinMatch(
 				}
 				console.log("Parsed data:", data);
 
-				// Check if the response indicates success
-				if (!data.success) {
-					throw new Error(data.message || "Match creation failed");
+				// Handle standardized API response format: { success: true/false, data/error: ... }
+				if (data.success === false) {
+					const errorMsg =
+						data.error?.message || data.error || "Match creation failed";
+					throw new Error(errorMsg);
 				}
 
-				if (data.matchId) {
-					console.log("Joining created match:", data.matchId);
-					const match = await socket.joinMatch(data.matchId);
+				// Extract the actual response data from standardized format
+				const responseData = data.data || data;
+
+				if (responseData.matchId) {
+					console.log("Joining created match:", responseData.matchId);
+					const match = await socket.joinMatch(responseData.matchId);
 					return {
-						matchId: data.matchId,
+						matchId: responseData.matchId,
 						match: match,
 					};
 				}
@@ -140,18 +145,26 @@ export async function addBot(client, session, matchId) {
 		return {};
 	}
 
-	// If payload is already an object, return it directly
-	if (typeof response.payload === "object") {
-		return response.payload;
-	}
+	let data = response.payload;
 
 	// If payload is a string, try to parse it as JSON
-	try {
-		return JSON.parse(response.payload);
-	} catch (error) {
-		console.error("Failed to parse bot response payload:", error);
-		return { success: true, message: "Bot added" };
+	if (typeof data === "string") {
+		try {
+			data = JSON.parse(data);
+		} catch (error) {
+			console.error("Failed to parse bot response payload:", error);
+			return { success: true, message: "Bot added" };
+		}
 	}
+
+	// Handle standardized API response format: { success: true/false, data/error: ... }
+	if (data.success === false) {
+		const errorMsg = data.error?.message || data.error || "Failed to add bot";
+		throw new Error(errorMsg);
+	}
+
+	// Extract the actual response data from standardized format
+	return data.data || data;
 }
 
 /**
@@ -192,14 +205,24 @@ export async function startMatchmaking(client, session, socket, gameMode) {
 		}
 	}
 
-	if (data.matchId) {
+	// Handle standardized API response format: { success: true/false, data/error: ... }
+	if (data.success === false) {
+		const errorMsg =
+			data.error?.message || data.error || "Failed to find or create match";
+		throw new Error(errorMsg);
+	}
+
+	// Extract the actual response data from standardized format
+	const responseData = data.data || data;
+
+	if (responseData.matchId) {
 		// Join the match via socket
-		const match = await socket.joinMatch(data.matchId);
+		const match = await socket.joinMatch(responseData.matchId);
 		return {
-			matchId: data.matchId,
+			matchId: responseData.matchId,
 			match: match,
-			success: data.success, // true = created new, false = joined existing
-			message: data.message,
+			success: responseData.success, // true = created new, false = joined existing
+			message: responseData.message,
 		};
 	}
 
@@ -1179,7 +1202,8 @@ export async function leaveChannelStream(client, session, channelId) {
 // ========================================
 
 /**
- * Parse RPC response
+ * Parse RPC response with standardized API response format support
+ * Format: { success: true/false, data: {...} } or { success: false, error: { code: number, message: string } }
  * @param {object} response - RPC response
  * @returns {object} Parsed data
  */
@@ -1196,7 +1220,13 @@ function parseRpcResponse(response) {
 		}
 	}
 
-	// Check for error in response
+	// Handle standardized API error response: { success: false, error: { code, message } }
+	if (data.success === false) {
+		const errorMsg = data.error?.message || data.error || "Request failed";
+		throw new Error(errorMsg);
+	}
+
+	// Check for legacy error format
 	if (data.error) {
 		throw new Error(data.error.message || data.error);
 	}

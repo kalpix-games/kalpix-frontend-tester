@@ -54,7 +54,8 @@ async function callUnauthenticatedRpc(client, rpcId, payload) {
 }
 
 /**
- * Parse RPC response
+ * Parse RPC response with standardized API response format support
+ * Format: { success: true/false, data: {...} } or { success: false, error: { code: number, message: string } }
  * @param {object} response - RPC response
  * @returns {object} Parsed data
  */
@@ -72,14 +73,26 @@ function parseRpcResponse(response) {
 		}
 	}
 
-	// Check for error in response
-	if (!data.success && data.error) {
+	// Handle standardized API error response: { success: false, error: { code, message } }
+	if (data.success === false) {
+		const errorMessage =
+			data.error?.message ||
+			data.error?.error ||
+			data.error ||
+			"Request failed";
+		console.error("RPC Error:", errorMessage);
+		throw new Error(errorMessage);
+	}
+
+	// Check for legacy error format
+	if (data.error) {
 		const errorMessage = data.error.message || data.error.error || data.error;
 		console.error("RPC Error:", errorMessage);
 		throw new Error(errorMessage);
 	}
 
-	return data;
+	// Return the data field if it exists, otherwise return the whole payload
+	return data.data || data;
 }
 
 // ========================================
