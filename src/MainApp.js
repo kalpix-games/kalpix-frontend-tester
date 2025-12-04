@@ -125,10 +125,32 @@ function MainApp() {
 	}, [client, session]); // Only reconnect when client or session changes
 
 	// Handle logout
-	const handleLogout = () => {
+	const handleLogout = async () => {
+		// IMPORTANT: Call Nakama's session logout API to trigger AfterSessionLogout hook
+		// This is required for the backend to properly cleanup guest/unverified accounts
+		if (client && session) {
+			try {
+				console.log("🔴 Calling Nakama session logout...");
+				await client.sessionLogout(
+					session,
+					session.token,
+					session.refresh_token
+				);
+				console.log("✅ Nakama session logout successful");
+			} catch (error) {
+				console.error(
+					"⚠️ Failed to call session logout (continuing with local cleanup):",
+					error
+				);
+			}
+		}
+
+		// Disconnect WebSocket
 		if (socket) {
 			socket.disconnect();
 		}
+
+		// Clear local state
 		setSession(null);
 		setSocket(null);
 		setIsConnected(false);
