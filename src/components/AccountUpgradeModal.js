@@ -158,10 +158,12 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
+			// Pass existing session to upgrade the existing account instead of creating a new one
 			const result = await verifyRegistrationOTP(
 				client,
 				formData.email,
-				formData.otp
+				formData.otp,
+				session // Pass session for authenticated verification (account upgrade)
 			);
 			setSuccess("Account upgraded successfully!");
 			setTimeout(() => {

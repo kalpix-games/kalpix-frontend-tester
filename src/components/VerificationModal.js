@@ -5,8 +5,9 @@ import "./VerificationModal.css";
 /**
  * Verification Modal Component
  * Allows unverified email users to verify their email
+ * @param {object} session - Optional: existing session from skip_verification (to upgrade account)
  */
-function VerificationModal({ client, email, onClose, onVerified }) {
+function VerificationModal({ client, email, session, onClose, onVerified }) {
 	const [otp, setOtp] = useState("");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
@@ -57,7 +58,9 @@ function VerificationModal({ client, email, onClose, onVerified }) {
 		setSuccess("");
 
 		try {
-			const result = await verifyRegistrationOTP(client, email, otp);
+			// Pass existing session if user went through skip_verification
+			// This allows backend to upgrade the existing account instead of creating a new one
+			const result = await verifyRegistrationOTP(client, email, otp, session);
 			setSuccess("Email verified successfully!");
 			setTimeout(() => {
 				if (onVerified) {

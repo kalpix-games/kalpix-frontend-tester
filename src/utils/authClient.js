@@ -253,9 +253,15 @@ export async function registerEmail(
  * @param {object} client - Nakama client
  * @param {string} email - Email
  * @param {string} otp - OTP code
+ * @param {object} existingSession - Optional: existing session from skip_verification (to upgrade account)
  * @returns {object} Session and user data
  */
-export async function verifyRegistrationOTP(client, email, otp) {
+export async function verifyRegistrationOTP(
+	client,
+	email,
+	otp,
+	existingSession = null
+) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
@@ -264,14 +270,37 @@ export async function verifyRegistrationOTP(client, email, otp) {
 			throw new Error("Email and OTP are required");
 		}
 
-		const response = await callUnauthenticatedRpc(
-			client,
-			"auth/verify_registration_otp",
-			{
-				email,
-				otp,
-			}
-		);
+		let response;
+		if (existingSession && existingSession.token) {
+			// AUTHENTICATED request - user went through skip_verification and has a session
+			// This allows backend to identify the caller and upgrade their existing account
+			console.log(
+				"🔄 Calling authenticated verify_registration_otp RPC (account upgrade)"
+			);
+			console.log("🔄 Existing UserID:", existingSession.user_id);
+			response = await client.rpc(
+				existingSession,
+				"auth/verify_registration_otp",
+				{
+					email,
+					otp,
+				}
+			);
+		} else {
+			// UNAUTHENTICATED request - direct verification without skip_verification
+			// Backend will create a new account
+			console.log(
+				"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
+			);
+			response = await callUnauthenticatedRpc(
+				client,
+				"auth/verify_registration_otp",
+				{
+					email,
+					otp,
+				}
+			);
+		}
 		const data = parseRpcResponse(response);
 
 		// The backend returns session data directly

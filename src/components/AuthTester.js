@@ -231,10 +231,13 @@ function AuthTester({
 		}
 		setLoading(true);
 		try {
+			// Pass existing session if user went through skip_verification
+			// This allows backend to upgrade the existing account instead of creating a new one
 			const result = await verifyRegistrationOTP(
 				client,
 				registerForm.email,
-				registerForm.otp
+				registerForm.otp,
+				session // Pass session for authenticated verification (account upgrade)
 			);
 			setSession(result.session);
 			setRegistrationStep("form");

@@ -171,6 +171,7 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 					<VerificationModal
 						client={client}
 						email={profile.email}
+						session={session}
 						onClose={() => setShowVerificationModal(false)}
 						onVerified={handleVerified}
 					/>
