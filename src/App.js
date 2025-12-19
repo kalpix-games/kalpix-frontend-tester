@@ -74,6 +74,7 @@ function App({
 		shieldWindowActive: false,
 		swapRequestActive: false,
 		availableSwapTargets: [], // 🔄 7-0 Rule: Available targets for hand swap
+		forcePlayDrawnCard: null, // 🔧 FIX: Store drawn card ID when force_play_popup is shown
 
 		// Scores
 		scores: {},
@@ -354,6 +355,12 @@ function App({
 				case "player_left":
 					handlePlayerLeft(eventData);
 					break;
+				case "force_play_popup":
+					handleForcePlayPopup(eventData);
+					break;
+				case "force_play_popup_dismiss":
+					handleForcePlayPopupDismiss(eventData);
+					break;
 				default:
 					// Handle other events
 					break;
@@ -542,23 +549,45 @@ function App({
 
 	const handleCardDrawn = useCallback(
 		(data) => {
-			setGameState((prev) => ({
-				...prev,
-				players: Array.isArray(prev.players)
-					? prev.players.map((p) =>
-							p.userId === data.playerId
-								? { ...p, handSize: data.newHandSize }
-								: p
-					  )
-					: prev.players,
-			}));
+			const myUserId = myUserIdRef.current || session?.user_id;
 
-			if (data.newHand && data.playerId === session?.user_id) {
-				setGameState((prev) => ({ ...prev, myHand: data.newHand }));
-			}
+			setGameState((prev) => {
+				const newState = {
+					...prev,
+					players: Array.isArray(prev.players)
+						? prev.players.map((p) =>
+								p.userId === data.playerId
+									? { ...p, handSize: data.newHandSize }
+									: p
+						  )
+						: prev.players,
+				};
+
+				// Update hand if provided
+				if (data.newHand && data.playerId === myUserId) {
+					newState.myHand = data.newHand;
+				}
+
+				// 🔧 FIX: If this is a force play scenario (canPlay: true, drawDespiteValid: true)
+				// and the drawn card is not in hand yet, preserve forcePlayDrawnCard state
+				// The force_play_popup event will be sent separately to handle this
+				if (
+					data.playerId === myUserId &&
+					data.drawnCard &&
+					data.canPlay &&
+					data.drawDespiteValid
+				) {
+					// Don't update myHand here - the card was removed from hand in backend
+					// The force_play_popup event will handle adding it to playableCards
+				}
+
+				return newState;
+			});
 
 			if (data.playerName) {
-				showNotification(`${data.playerName} drew ${data.cardsDrawn} card(s)`);
+				showNotification(
+					`${data.playerName} drew ${data.cardsDrawn || 1} card(s)`
+				);
 			}
 		},
 		[session, showNotification]
@@ -842,6 +871,55 @@ function App({
 			}
 		},
 		[showNotification]
+	);
+
+	// 🔧 FIX: Handle force play popup (when player must play drawn card after 3 draws)
+	const handleForcePlayPopup = useCallback(
+		(data) => {
+			console.log("🔴 Force play popup received", data);
+			const myUserId = myUserIdRef.current || session?.user_id;
+
+			if (data.playerId === myUserId && data.drawnCard) {
+				// This is for the current player - add drawn card to playableCards
+				setGameState((prev) => ({
+					...prev,
+					forcePlayDrawnCard: data.drawnCard,
+					// Add drawn card to playableCards so it can be selected
+					playableCards: [...(prev.playableCards || []), data.drawnCard],
+				}));
+				showNotification(data.message || "You must play the drawn card!");
+			} else {
+				// Another player's popup - just show notification
+				const playerName =
+					gameState.players?.find((p) => p.userId === data.playerId)
+						?.username || "A player";
+				showNotification(`🔴 ${playerName} must play their drawn card`);
+			}
+		},
+		[session, showNotification, gameState.players]
+	);
+
+	// 🔧 FIX: Handle force play popup dismiss (when card is played or timer expires)
+	const handleForcePlayPopupDismiss = useCallback(
+		(data) => {
+			console.log("✅ Force play popup dismissed", data);
+			const myUserId = myUserIdRef.current || session?.user_id;
+
+			if (data.playerId === myUserId) {
+				setGameState((prev) => {
+					// Remove drawn card from playableCards
+					const newPlayableCards = (prev.playableCards || []).filter(
+						(cardId) => cardId !== prev.forcePlayDrawnCard
+					);
+					return {
+						...prev,
+						forcePlayDrawnCard: null,
+						playableCards: newPlayableCards,
+					};
+				});
+			}
+		},
+		[session]
 	);
 
 	// Match Actions

@@ -40,6 +40,55 @@ function PlayerHand({
 				🃏 Your Hand ({gameState.myHand.length} cards)
 			</h2>
 
+			{/* 🔧 FIX: Show force play popup message and drawn card */}
+			{isMyTurn && gameState.forcePlayDrawnCard && (
+				<div
+					style={{
+						padding: "12px",
+						backgroundColor: "#fff3cd",
+						border: "2px solid #ffc107",
+						borderRadius: "8px",
+						marginBottom: "15px",
+						fontSize: "12px",
+						textAlign: "center",
+					}}
+				>
+					<strong style={{ color: "#856404" }}>
+						🔴 You must play the drawn card!
+					</strong>
+					<div style={{ marginTop: "10px" }}>
+						<div
+							onClick={() => onCardSelect(gameState.forcePlayDrawnCard)}
+							style={{
+								padding: "10px",
+								backgroundColor:
+									selectedCard === gameState.forcePlayDrawnCard
+										? "#007bff"
+										: "#d4edda",
+								color:
+									selectedCard === gameState.forcePlayDrawnCard
+										? "white"
+										: "#155724",
+								borderRadius: "8px",
+								border: `3px solid ${
+									selectedCard === gameState.forcePlayDrawnCard
+										? "#0056b3"
+										: "#28a745"
+								}`,
+								cursor: "pointer",
+								fontWeight: "bold",
+								fontSize: "14px",
+								display: "inline-block",
+								minWidth: "120px",
+							}}
+						>
+							{getCardName(gameState.forcePlayDrawnCard)}
+							{selectedCard === gameState.forcePlayDrawnCard && " 👈"}
+						</div>
+					</div>
+				</div>
+			)}
+
 			{/* Playable Cards Info - Only show to current player */}
 			{isMyTurn && (
 				<div
