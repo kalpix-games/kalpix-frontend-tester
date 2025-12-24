@@ -28,7 +28,6 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 		try {
 			const profileData = await getUserProfile(client, session);
 			console.log("🔍 Banner Profile Data:", profileData);
-			console.log("🔍 isSecure:", profileData.isSecure);
 			console.log("🔍 isVerified:", profileData.isVerified);
 			console.log("🔍 accountType:", profileData.accountType);
 
@@ -78,8 +77,7 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [client, session]);
 
-	// Check if account is secure
-	const isSecure = profile?.isSecure;
+	// Check if account is verified
 	const isVerified = profile?.isVerified;
 	const accountType = profile?.accountType;
 
@@ -136,7 +134,7 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 	// IMPORTANT: Only show "Verify" banner if accountType is "email"
 	// If accountType is "guest" but email exists in metadata, it means the email was
 	// claimed by another user (fraudster scenario) - show "Register" banner instead
-	if (!isSecure && !isVerified && accountType === "email") {
+	if (!isVerified && accountType === "email") {
 		return (
 			<>
 				{renderNotification()}
@@ -188,7 +186,7 @@ function AccountSecurityBanner({ client, session, socket, onSessionUpdate }) {
 		profile.metadata &&
 		profile.metadata.email === null;
 
-	if (!isSecure && !isVerified && accountType === "guest") {
+	if (!isVerified && accountType === "guest") {
 		return (
 			<>
 				{renderNotification()}

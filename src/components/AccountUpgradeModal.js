@@ -3,7 +3,6 @@ import GoogleLoginButton from "./GoogleLoginButton";
 import {
 	registerEmail,
 	verifyRegistrationOTP,
-	skipVerification,
 	resendOTP,
 	checkUsernameAvailable,
 } from "../utils/authClient";
@@ -108,14 +107,13 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// Send the username as-is (can be empty string)
-			// Backend will handle: empty -> use current username (account upgrade) or generate (new registration)
+			// Note: Account upgrade via email registration is not supported
+			// Guest users should use link_email instead for upgrading their account
 			const result = await registerEmail(
 				client,
-				formData.username, // Can be empty string
+				formData.username || "", // Required for new registrations
 				formData.email,
-				formData.password,
-				session // Pass session for account upgrade
+				formData.password
 			);
 			setStep("otp");
 			setSuccess(result.message || "OTP sent to your email!");
@@ -158,12 +156,11 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// Pass existing session to upgrade the existing account instead of creating a new one
+			// Verify OTP and create new verified account
 			const result = await verifyRegistrationOTP(
 				client,
 				formData.email,
-				formData.otp,
-				session // Pass session for authenticated verification (account upgrade)
+				formData.otp
 			);
 			setSuccess("Account upgraded successfully!");
 			setTimeout(() => {
@@ -211,27 +208,6 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		}
 	};
 
-	// Handle skip verification
-	const handleSkipVerification = async () => {
-		setLoading(true);
-		setError("");
-
-		try {
-			const result = await skipVerification(client, formData.email);
-			setSuccess("Account created! You can verify your email later.");
-			setTimeout(() => {
-				if (onUpgraded) {
-					onUpgraded(result.session);
-				}
-				onClose();
-			}, 1500);
-		} catch (err) {
-			console.error("Skip verification error:", err);
-			setError(err.message || "Failed to skip verification");
-		} finally {
-			setLoading(false);
-		}
-	};
 
 	// Handle resend OTP
 	const handleResendOTP = async () => {
@@ -433,13 +409,6 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 								className="btn-primary"
 							>
 								{loading ? "Verifying..." : "✅ Verify & Upgrade"}
-							</button>
-							<button
-								onClick={handleSkipVerification}
-								disabled={loading}
-								className="btn-secondary"
-							>
-								⏭️ Verify Later
 							</button>
 						</div>
 

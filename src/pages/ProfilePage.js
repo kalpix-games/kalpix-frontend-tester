@@ -211,9 +211,6 @@ function ProfilePage({ client, session }) {
 								<label>Account Type:</label>
 								<span className="info-value account-type">
 									{profile.accountType}
-									{profile.isSecure && (
-										<span className="badge secure">✓ Secure</span>
-									)}
 									{profile.isVerified && (
 										<span className="badge verified">✓ Verified</span>
 									)}

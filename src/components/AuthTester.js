@@ -4,7 +4,6 @@ import GoogleLoginButton from "./GoogleLoginButton";
 import {
 	registerEmail,
 	verifyRegistrationOTP,
-	skipVerification,
 	resendOTP,
 	checkUsernameAvailable,
 	loginWithEmail,
@@ -231,13 +230,11 @@ function AuthTester({
 		}
 		setLoading(true);
 		try {
-			// Pass existing session if user went through skip_verification
-			// This allows backend to upgrade the existing account instead of creating a new one
+			// Verify OTP and create new verified account
 			const result = await verifyRegistrationOTP(
 				client,
 				registerForm.email,
-				registerForm.otp,
-				session // Pass session for authenticated verification (account upgrade)
+				registerForm.otp
 			);
 			setSession(result.session);
 			setRegistrationStep("form");
@@ -280,29 +277,6 @@ function AuthTester({
 		}
 	};
 
-	const handleSkipVerification = async () => {
-		if (!client) {
-			showStatus("error", "Client not initialized. Please refresh the page.");
-			return;
-		}
-		setLoading(true);
-		try {
-			const result = await skipVerification(client, registerForm.email);
-			setSession(result.session);
-			setRegistrationStep("form");
-			setRemainingAttempts(null);
-			showStatus(
-				"success",
-				`Welcome ${result.data.username}! You can verify your email later.`
-			);
-			if (onAuthSuccess) onAuthSuccess(result.session);
-		} catch (error) {
-			console.error("Skip verification error:", error);
-			showStatus("error", error.message || "Failed to skip verification");
-		} finally {
-			setLoading(false);
-		}
-	};
 
 	const handleResendOTP = async () => {
 		if (!client) {
@@ -641,10 +615,6 @@ function AuthTester({
 										<strong>Account Type:</strong> {profile.accountType}
 									</div>
 									<div>
-										<strong>Is Secure:</strong>{" "}
-										{profile.isSecure ? "✅ Yes" : "❌ No"}
-									</div>
-									<div>
 										<strong>Is Verified:</strong>{" "}
 										{profile.isVerified ? "✅ Yes" : "❌ No"}
 									</div>
@@ -720,9 +690,9 @@ function AuthTester({
 				</div>
 
 				{/* Account Linking (only for guest accounts) */}
-				{profile && !profile.isSecure && (
+				{profile && !profile.isVerified && profile.accountType === "guest" && (
 					<div className="card warning">
-						<h3>⚠️ Unsecured Account</h3>
+						<h3>⚠️ Unverified Account</h3>
 						<p>
 							Your account is not secure. Link an email to prevent data loss!
 						</p>
@@ -986,14 +956,6 @@ function AuthTester({
 									>
 										✅ Verify & Register
 									</button>
-									<button
-										onClick={handleSkipVerification}
-										disabled={loading}
-										className="btn-secondary"
-										style={{ backgroundColor: "#6c757d" }}
-									>
-										⏭️ Verify Later
-									</button>
 								</div>
 
 								<div
@@ -1038,9 +1000,7 @@ function AuthTester({
 									<ul style={{ marginTop: "10px", paddingLeft: "20px" }}>
 										<li>Check your spam/junk folder</li>
 										<li>Wait a few moments and click "Resend OTP"</li>
-										<li>
-											Or click "Verify Later" to continue without verification
-										</li>
+										<li>Make sure the email address is correct</li>
 									</ul>
 								</div>
 							</div>

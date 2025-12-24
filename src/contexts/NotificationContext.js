@@ -34,6 +34,7 @@ export const NOTIFICATION_CODES = {
 	GAME_INVITE: 40,
 	GAME_START: 41,
 	PRESENCE_UPDATE: 50,
+	CONVERSATION_UPDATE: 60,
 };
 
 // Custom event emitter for real-time updates
@@ -309,6 +310,11 @@ export const NotificationProvider = ({ children, socket, client, session }) => {
 						[userId]: { isOnline, lastSeenAt: timestamp },
 					}));
 					emitEvent("presence_update", newNotification.content);
+					break;
+
+				case NOTIFICATION_CODES.CONVERSATION_UPDATE:
+					// Emit conversation update event for conversation list updates
+					emitEvent("conversation_updated", newNotification.content);
 					break;
 
 				default:

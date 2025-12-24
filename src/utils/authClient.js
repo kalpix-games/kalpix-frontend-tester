@@ -4,6 +4,42 @@
  */
 
 /**
+ * Get device ID from localStorage or generate a new one
+ * @returns {string} Device ID
+ */
+function getDeviceId() {
+	if (typeof window !== "undefined" && window.localStorage) {
+		let deviceId = localStorage.getItem("kalpix_device_id");
+		if (!deviceId) {
+			deviceId = `web_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+			localStorage.setItem("kalpix_device_id", deviceId);
+		}
+		return deviceId;
+	}
+	// Fallback for non-browser environments
+	return `web_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Get platform identifier
+ * @returns {string} Platform ('web', 'android', or 'ios')
+ */
+function getPlatform() {
+	return "web"; // For browser apps
+}
+
+/**
+ * Get device name
+ * @returns {string} Device name
+ */
+function getDeviceName() {
+	if (typeof navigator !== "undefined") {
+		return navigator.userAgent || "Web Browser";
+	}
+	return "Web Browser";
+}
+
+/**
  * Call an unauthenticated RPC using HTTP key (POST method)
  * This is a workaround because client.rpcHttpKey() uses GET which doesn't work for our backend
  * @param {object} client - Nakama client
@@ -114,9 +150,15 @@ export async function loginAsGuest(client, deviceId) {
 			throw new Error("Device ID is required");
 		}
 
+		// Get platform and device name
+		const platform = getPlatform();
+		const deviceName = getDeviceName();
+
 		// Use our custom RPC that generates themed usernames
 		const response = await callUnauthenticatedRpc(client, "auth/device_login", {
-			device_id: deviceId,
+			deviceId: deviceId, // Backend expects camelCase
+			platform: platform,
+			deviceName: deviceName,
 			username: "", // Let backend generate themed username
 		});
 
@@ -215,10 +257,17 @@ export async function registerEmail(
 			throw new Error("Email and password are required");
 		}
 
+		const deviceId = getDeviceId();
+		const platform = getPlatform();
+		const deviceName = getDeviceName();
+
 		const payload = {
 			username: username || "", // Send empty string if username not provided
 			email,
 			password,
+			deviceId,
+			platform,
+			deviceName,
 		};
 
 		let response;
@@ -253,14 +302,14 @@ export async function registerEmail(
  * @param {object} client - Nakama client
  * @param {string} email - Email
  * @param {string} otp - OTP code
- * @param {object} existingSession - Optional: existing session from skip_verification (to upgrade account)
+ * @param {string} deviceId - Device ID
  * @returns {object} Session and user data
  */
 export async function verifyRegistrationOTP(
 	client,
 	email,
 	otp,
-	existingSession = null
+	deviceId = null
 ) {
 	try {
 		if (!client) {
@@ -270,37 +319,25 @@ export async function verifyRegistrationOTP(
 			throw new Error("Email and OTP are required");
 		}
 
-		let response;
-		if (existingSession && existingSession.token) {
-			// AUTHENTICATED request - user went through skip_verification and has a session
-			// This allows backend to identify the caller and upgrade their existing account
-			console.log(
-				"🔄 Calling authenticated verify_registration_otp RPC (account upgrade)"
-			);
-			console.log("🔄 Existing UserID:", existingSession.user_id);
-			response = await client.rpc(
-				existingSession,
-				"auth/verify_registration_otp",
-				{
-					email,
-					otp,
-				}
-			);
-		} else {
-			// UNAUTHENTICATED request - direct verification without skip_verification
-			// Backend will create a new account
-			console.log(
-				"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
-			);
-			response = await callUnauthenticatedRpc(
-				client,
-				"auth/verify_registration_otp",
-				{
-					email,
-					otp,
-				}
-			);
+		// Get device ID if not provided
+		if (!deviceId) {
+			deviceId = getDeviceId();
 		}
+
+		// UNAUTHENTICATED request - new email registration verification
+		// Backend will create a new verified account
+		console.log(
+			"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
+		);
+		const response = await callUnauthenticatedRpc(
+			client,
+			"auth/verify_registration_otp",
+			{
+				email,
+				otp,
+				deviceId,
+			}
+		);
 		const data = parseRpcResponse(response);
 
 		// The backend returns session data directly
@@ -332,63 +369,13 @@ export async function verifyRegistrationOTP(
 }
 
 /**
- * Skip verification and create unverified account (deferred verification)
+ * Resend OTP for registration or email linking
  * @param {object} client - Nakama client
  * @param {string} email - Email
- * @returns {object} Session and user data
- */
-export async function skipVerification(client, email) {
-	try {
-		if (!client) {
-			throw new Error("Nakama client is not initialized");
-		}
-		if (!email) {
-			throw new Error("Email is required");
-		}
-
-		const response = await callUnauthenticatedRpc(
-			client,
-			"auth/skip_verification",
-			{
-				email,
-			}
-		);
-		const data = parseRpcResponse(response);
-
-		// The backend returns session data directly
-		const sessionData = data.data || data;
-
-		// Create a session object from the response
-		const session = {
-			token:
-				sessionData.sessionToken ||
-				sessionData.token ||
-				sessionData.session_token,
-			refresh_token: "",
-			user_id: sessionData.userId || sessionData.user_id,
-			username: sessionData.username,
-			created_at: Date.now(),
-			expires_at:
-				sessionData.expiresAt || sessionData.expires_at || Date.now() + 3600000,
-		};
-
-		return {
-			session,
-			data: sessionData,
-		};
-	} catch (error) {
-		console.error("Skip verification failed:", error);
-		throw new Error(error.message || "Failed to skip verification");
-	}
-}
-
-/**
- * Resend OTP for registration
- * @param {object} client - Nakama client
- * @param {string} email - Email
+ * @param {object} session - Optional: existing session (for email linking flow)
  * @returns {object} Result
  */
-export async function resendOTP(client, email) {
+export async function resendOTP(client, email, session = null) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
@@ -397,9 +384,25 @@ export async function resendOTP(client, email) {
 			throw new Error("Email is required");
 		}
 
-		const response = await callUnauthenticatedRpc(client, "auth/resend_otp", {
+		const deviceId = getDeviceId();
+		const payload = {
 			email,
-		});
+			deviceId,
+		};
+
+		let response;
+		if (session && session.token) {
+			// Authenticated request - for email linking flow
+			response = await client.rpc(session, "auth/resend_otp", payload);
+		} else {
+			// Unauthenticated request - for new registration flow
+			response = await callUnauthenticatedRpc(
+				client,
+				"auth/resend_otp",
+				payload
+			);
+		}
+
 		const data = parseRpcResponse(response);
 		return data.data || data;
 	} catch (error) {
@@ -428,10 +431,18 @@ export async function loginWithEmail(client, email, password) {
 			throw new Error("Email and password are required");
 		}
 
+		// Get device information
+		const deviceId = getDeviceId();
+		const platform = getPlatform();
+		const deviceName = getDeviceName();
+
 		// Direct login with email and password (no OTP required)
 		const response = await callUnauthenticatedRpc(client, "auth/login_email", {
 			email,
 			password,
+			deviceId,
+			platform,
+			deviceName,
 		});
 		const data = parseRpcResponse(response);
 
@@ -739,10 +750,12 @@ export async function verifyEmailLink(client, session, otp) {
  * Get user profile
  * @param {object} client - Nakama client
  * @param {object} session - Current session
- * @returns {object} User profile
+ * @param {string} targetUserId - Optional target user ID (if not provided, returns own profile)
+ * @returns {object} User profile (ProfileInfoResponse)
  */
-export async function getUserProfile(client, session) {
-	const response = await client.rpc(session, "auth/get_profile", {});
+export async function getUserProfile(client, session, targetUserId = null) {
+	const payload = targetUserId ? { target_user_id: targetUserId } : {};
+	const response = await client.rpc(session, "social/get_profile_info", payload);
 	const data = parseRpcResponse(response);
 	return data.data || data;
 }

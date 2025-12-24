@@ -891,6 +891,23 @@ export async function getChannels(client, session) {
 }
 
 /**
+ * Get conversations list with pagination and priority sorting
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {number} limit - Number of conversations to fetch (default: 20)
+ * @param {string} cursor - Cursor for pagination (optional)
+ * @returns {object} Conversations list with pagination info
+ */
+export async function getConversations(client, session, limit = 20, cursor = null) {
+	const payload = { limit };
+	if (cursor) {
+		payload.cursor = cursor;
+	}
+	const response = await client.rpc(session, "chat/get_conversations", payload);
+	return parseRpcResponse(response);
+}
+
+/**
  * Get a single channel by ID
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
