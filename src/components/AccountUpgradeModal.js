@@ -28,6 +28,7 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		email: "",
 		password: "",
 		otp: "",
+		registrationId: "", // Backend-generated registration ID
 	});
 	const [usernameAvailable, setUsernameAvailable] = useState(null);
 	const [remainingAttempts, setRemainingAttempts] = useState(null);
@@ -115,6 +116,18 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 				formData.email,
 				formData.password
 			);
+			
+			// Store registrationId from response
+			if (result.registrationId) {
+				setFormData(prev => ({
+					...prev,
+					registrationId: result.registrationId,
+				}));
+				// Also store in localStorage for persistence
+				localStorage.setItem('pending_registration_id', result.registrationId);
+				localStorage.setItem('pending_registration_email', formData.email);
+			}
+			
 			setStep("otp");
 			setSuccess(result.message || "OTP sent to your email!");
 			setTimeout(() => setSuccess(""), 3000);
@@ -152,6 +165,15 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 			return;
 		}
 
+		// Get registrationId from state or localStorage
+		const registrationId = formData.registrationId || localStorage.getItem('pending_registration_id');
+		
+		if (!registrationId) {
+			setError("Registration ID not found. Please register again.");
+			setStep("form");
+			return;
+		}
+		
 		setLoading(true);
 		setError("");
 
@@ -160,8 +182,14 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 			const result = await verifyRegistrationOTP(
 				client,
 				formData.email,
-				formData.otp
+				formData.otp,
+				registrationId
 			);
+			
+			// Clear registrationId from localStorage after successful verification
+			localStorage.removeItem('pending_registration_id');
+			localStorage.removeItem('pending_registration_email');
+			
 			setSuccess("Account upgraded successfully!");
 			setTimeout(() => {
 				if (onUpgraded) {
@@ -211,11 +239,20 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 
 	// Handle resend OTP
 	const handleResendOTP = async () => {
+		// Get registrationId from state or localStorage
+		const registrationId = formData.registrationId || localStorage.getItem('pending_registration_id');
+		
+		if (!registrationId) {
+			setError("Registration ID not found. Please register again.");
+			setStep("form");
+			return;
+		}
+		
 		setLoading(true);
 		setError("");
 
 		try {
-			const result = await resendOTP(client, formData.email);
+			const result = await resendOTP(client, formData.email, registrationId, null);
 			setRemainingAttempts(null);
 			setSuccess(result.message || "OTP sent successfully!");
 			setTimeout(() => setSuccess(""), 3000);

@@ -290,7 +290,19 @@ export async function registerEmail(
 		}
 
 		const data = parseRpcResponse(response);
-		return data.data || data;
+		const result = data.data || data;
+		
+		// Extract registrationId from response (backend-generated UUID)
+		const registrationId = result.registrationId;
+		
+		if (!registrationId) {
+			console.warn("⚠️ Registration response missing registrationId");
+		}
+		
+		return {
+			...result,
+			registrationId: registrationId,
+		};
 	} catch (error) {
 		console.error("Register email failed:", error);
 		throw new Error(error.message || "Failed to register");
@@ -302,14 +314,14 @@ export async function registerEmail(
  * @param {object} client - Nakama client
  * @param {string} email - Email
  * @param {string} otp - OTP code
- * @param {string} deviceId - Device ID
+ * @param {string} registrationId - Registration ID (from register_email response)
  * @returns {object} Session and user data
  */
 export async function verifyRegistrationOTP(
 	client,
 	email,
 	otp,
-	deviceId = null
+	registrationId
 ) {
 	try {
 		if (!client) {
@@ -318,10 +330,8 @@ export async function verifyRegistrationOTP(
 		if (!email || !otp) {
 			throw new Error("Email and OTP are required");
 		}
-
-		// Get device ID if not provided
-		if (!deviceId) {
-			deviceId = getDeviceId();
+		if (!registrationId) {
+			throw new Error("Registration ID is required. Please register again if you lost it.");
 		}
 
 		// UNAUTHENTICATED request - new email registration verification
@@ -335,7 +345,7 @@ export async function verifyRegistrationOTP(
 			{
 				email,
 				otp,
-				deviceId,
+				registrationId,
 			}
 		);
 		const data = parseRpcResponse(response);
@@ -372,10 +382,11 @@ export async function verifyRegistrationOTP(
  * Resend OTP for registration or email linking
  * @param {object} client - Nakama client
  * @param {string} email - Email
+ * @param {string} registrationId - Registration ID (required for new registrations, null for email linking)
  * @param {object} session - Optional: existing session (for email linking flow)
  * @returns {object} Result
  */
-export async function resendOTP(client, email, session = null) {
+export async function resendOTP(client, email, registrationId = null, session = null) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
@@ -384,18 +395,26 @@ export async function resendOTP(client, email, session = null) {
 			throw new Error("Email is required");
 		}
 
-		const deviceId = getDeviceId();
-		const payload = {
-			email,
-			deviceId,
-		};
-
+		let payload;
 		let response;
+		
 		if (session && session.token) {
 			// Authenticated request - for email linking flow
+			// No registrationId needed - backend uses session userID
+			payload = {
+				email,
+			};
 			response = await client.rpc(session, "auth/resend_otp", payload);
 		} else {
 			// Unauthenticated request - for new registration flow
+			// registrationId is required
+			if (!registrationId) {
+				throw new Error("Registration ID is required for new registrations. Please register again if you lost it.");
+			}
+			payload = {
+				email,
+				registrationId,
+			};
 			response = await callUnauthenticatedRpc(
 				client,
 				"auth/resend_otp",
