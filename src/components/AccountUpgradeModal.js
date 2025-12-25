@@ -108,26 +108,26 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// Note: Account upgrade via email registration is not supported
-			// Guest users should use link_email instead for upgrading their account
+			// Pass session token for authenticated guest account upgrade
 			const result = await registerEmail(
 				client,
-				formData.username || "", // Required for new registrations
+				formData.username || "", // Optional - can keep current username
 				formData.email,
-				formData.password
+				formData.password,
+				session // Pass session for authenticated upgrade
 			);
-			
+
 			// Store registrationId from response
 			if (result.registrationId) {
-				setFormData(prev => ({
+				setFormData((prev) => ({
 					...prev,
 					registrationId: result.registrationId,
 				}));
 				// Also store in localStorage for persistence
-				localStorage.setItem('pending_registration_id', result.registrationId);
-				localStorage.setItem('pending_registration_email', formData.email);
+				localStorage.setItem("pending_registration_id", result.registrationId);
+				localStorage.setItem("pending_registration_email", formData.email);
 			}
-			
+
 			setStep("otp");
 			setSuccess(result.message || "OTP sent to your email!");
 			setTimeout(() => setSuccess(""), 3000);
@@ -165,35 +165,36 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 			return;
 		}
 
-		// Get registrationId from state or localStorage
-		const registrationId = formData.registrationId || localStorage.getItem('pending_registration_id');
-		
-		if (!registrationId) {
-			setError("Registration ID not found. Please register again.");
-			setStep("form");
-			return;
-		}
-		
 		setLoading(true);
 		setError("");
 
 		try {
-			// Verify OTP and create new verified account
+			// For authenticated upgrade, registrationId is not required
+			// The backend uses the session token to identify the user
+			// Get registrationId only if available (for unauthenticated flow)
+			const registrationId =
+				formData.registrationId ||
+				localStorage.getItem("pending_registration_id");
+
+			// Verify OTP - pass session for authenticated guest account upgrade
 			const result = await verifyRegistrationOTP(
 				client,
-				formData.email,
+				formData.email, // Not required for authenticated upgrade, but kept for compatibility
 				formData.otp,
-				registrationId
+				registrationId || "", // Optional for authenticated upgrade
+				session // Pass session for authenticated upgrade
 			);
-			
+
 			// Clear registrationId from localStorage after successful verification
-			localStorage.removeItem('pending_registration_id');
-			localStorage.removeItem('pending_registration_email');
-			
+			localStorage.removeItem("pending_registration_id");
+			localStorage.removeItem("pending_registration_email");
+
 			setSuccess("Account upgraded successfully!");
 			setTimeout(() => {
 				if (onUpgraded) {
-					onUpgraded(result.session);
+					// For authenticated upgrade, pass the existing session (not a new one)
+					// The backend returns profile data, not a new session
+					onUpgraded(session);
 				}
 				onClose();
 			}, 1500);
@@ -236,23 +237,25 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		}
 	};
 
-
 	// Handle resend OTP
 	const handleResendOTP = async () => {
-		// Get registrationId from state or localStorage
-		const registrationId = formData.registrationId || localStorage.getItem('pending_registration_id');
-		
-		if (!registrationId) {
-			setError("Registration ID not found. Please register again.");
-			setStep("form");
-			return;
-		}
-		
 		setLoading(true);
 		setError("");
 
 		try {
-			const result = await resendOTP(client, formData.email, registrationId, null);
+			// For authenticated upgrade, registrationId is not required
+			// Get registrationId only if available (for unauthenticated flow)
+			const registrationId =
+				formData.registrationId ||
+				localStorage.getItem("pending_registration_id");
+
+			// Pass session for authenticated guest account upgrade
+			const result = await resendOTP(
+				client,
+				formData.email,
+				registrationId || "",
+				session
+			);
 			setRemainingAttempts(null);
 			setSuccess(result.message || "OTP sent successfully!");
 			setTimeout(() => setSuccess(""), 3000);

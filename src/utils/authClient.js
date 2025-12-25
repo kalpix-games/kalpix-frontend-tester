@@ -321,57 +321,89 @@ export async function verifyRegistrationOTP(
 	client,
 	email,
 	otp,
-	registrationId
+	registrationId,
+	session = null
 ) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
 		}
-		if (!email || !otp) {
-			throw new Error("Email and OTP are required");
-		}
-		if (!registrationId) {
-			throw new Error("Registration ID is required. Please register again if you lost it.");
+		if (!otp) {
+			throw new Error("OTP is required");
 		}
 
-		// UNAUTHENTICATED request - new email registration verification
-		// Backend will create a new verified account
-		console.log(
-			"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
-		);
-		const response = await callUnauthenticatedRpc(
-			client,
-			"auth/verify_registration_otp",
-			{
-				email,
-				otp,
-				registrationId,
+		const payload = {
+			otp,
+		};
+
+		let response;
+		
+		// If session is provided, this is an authenticated request (guest account upgrade)
+		// If no session, this is a new registration (requires email and registrationId)
+		if (session) {
+			// AUTHENTICATED request - guest account upgrade
+			// Backend will upgrade the existing guest account
+			console.log(
+				"🔄 Calling authenticated verify_registration_otp RPC (account upgrade)"
+			);
+			// Note: email and registrationId are not required for authenticated upgrade
+			// The backend uses the session to identify the user
+			response = await client.rpc(session, "auth/verify_registration_otp", payload);
+		} else {
+			// UNAUTHENTICATED request - new email registration verification
+			// Backend will create a new verified account
+			if (!email) {
+				throw new Error("Email is required for new registrations");
 			}
-		);
+			if (!registrationId) {
+				throw new Error("Registration ID is required. Please register again if you lost it.");
+			}
+			console.log(
+				"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
+			);
+			payload.email = email;
+			payload.registrationId = registrationId;
+			response = await callUnauthenticatedRpc(
+				client,
+				"auth/verify_registration_otp",
+				payload
+			);
+		}
 		const data = parseRpcResponse(response);
 
-		// The backend returns session data directly
-		const sessionData = data.data || data;
+		// For authenticated upgrade, backend returns { message, profile }
+		// For new registration, backend returns SessionInfo
+		if (session) {
+			// Authenticated upgrade - return profile data
+			// The session token remains the same (no new session created)
+			return {
+				message: data.message || "Email linked successfully",
+				profile: data.profile || data.data?.profile,
+			};
+		} else {
+			// New registration - backend returns session data
+			const sessionData = data.data || data;
 
-		// Create a session object from the response
-		// Backend SessionInfo has: userId, username, sessionToken, expiresAt
-		const session = {
-			token:
-				sessionData.sessionToken ||
-				sessionData.token ||
-				sessionData.session_token,
-			refresh_token: "", // Backend doesn't provide refresh tokens
-			user_id: sessionData.userId || sessionData.user_id,
-			username: sessionData.username,
-			created_at: Date.now(),
-			expires_at:
-				sessionData.expiresAt || sessionData.expires_at || Date.now() + 3600000, // 1 hour default
-		};
+			// Create a session object from the response
+			// Backend SessionInfo has: userId, username, sessionToken, expiresAt
+			const newSession = {
+				token:
+					sessionData.sessionToken ||
+					sessionData.token ||
+					sessionData.session_token,
+				refresh_token: "", // Backend doesn't provide refresh tokens
+				user_id: sessionData.userId || sessionData.user_id,
+				username: sessionData.username,
+				created_at: Date.now(),
+				expires_at:
+					sessionData.expiresAt || sessionData.expires_at || Date.now() + 3600000, // 1 hour default
+			};
 
-		return {
-			session,
-			data: sessionData,
-		};
+			return {
+				session: newSession,
+				data: sessionData,
+			};
+		}
 	} catch (error) {
 		console.error("Verify registration OTP failed:", error);
 		throw new Error(error.message || "Failed to verify OTP");
