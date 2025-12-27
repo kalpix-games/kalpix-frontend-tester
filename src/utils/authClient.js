@@ -291,14 +291,14 @@ export async function registerEmail(
 
 		const data = parseRpcResponse(response);
 		const result = data.data || data;
-		
+
 		// Extract registrationId from response (backend-generated UUID)
 		const registrationId = result.registrationId;
-		
+
 		if (!registrationId) {
 			console.warn("⚠️ Registration response missing registrationId");
 		}
-		
+
 		return {
 			...result,
 			registrationId: registrationId,
@@ -337,7 +337,7 @@ export async function verifyRegistrationOTP(
 		};
 
 		let response;
-		
+
 		// If session is provided, this is an authenticated request (guest account upgrade)
 		// If no session, this is a new registration (requires email and registrationId)
 		if (session) {
@@ -348,7 +348,11 @@ export async function verifyRegistrationOTP(
 			);
 			// Note: email and registrationId are not required for authenticated upgrade
 			// The backend uses the session to identify the user
-			response = await client.rpc(session, "auth/verify_registration_otp", payload);
+			response = await client.rpc(
+				session,
+				"auth/verify_registration_otp",
+				payload
+			);
 		} else {
 			// UNAUTHENTICATED request - new email registration verification
 			// Backend will create a new verified account
@@ -356,7 +360,9 @@ export async function verifyRegistrationOTP(
 				throw new Error("Email is required for new registrations");
 			}
 			if (!registrationId) {
-				throw new Error("Registration ID is required. Please register again if you lost it.");
+				throw new Error(
+					"Registration ID is required. Please register again if you lost it."
+				);
 			}
 			console.log(
 				"🆕 Calling unauthenticated verify_registration_otp RPC (new account)"
@@ -396,7 +402,9 @@ export async function verifyRegistrationOTP(
 				username: sessionData.username,
 				created_at: Date.now(),
 				expires_at:
-					sessionData.expiresAt || sessionData.expires_at || Date.now() + 3600000, // 1 hour default
+					sessionData.expiresAt ||
+					sessionData.expires_at ||
+					Date.now() + 3600000, // 1 hour default
 			};
 
 			return {
@@ -418,7 +426,12 @@ export async function verifyRegistrationOTP(
  * @param {object} session - Optional: existing session (for email linking flow)
  * @returns {object} Result
  */
-export async function resendOTP(client, email, registrationId = null, session = null) {
+export async function resendOTP(
+	client,
+	email,
+	registrationId = null,
+	session = null
+) {
 	try {
 		if (!client) {
 			throw new Error("Nakama client is not initialized");
@@ -429,7 +442,7 @@ export async function resendOTP(client, email, registrationId = null, session = 
 
 		let payload;
 		let response;
-		
+
 		if (session && session.token) {
 			// Authenticated request - for email linking flow
 			// No registrationId needed - backend uses session userID
@@ -441,7 +454,9 @@ export async function resendOTP(client, email, registrationId = null, session = 
 			// Unauthenticated request - for new registration flow
 			// registrationId is required
 			if (!registrationId) {
-				throw new Error("Registration ID is required for new registrations. Please register again if you lost it.");
+				throw new Error(
+					"Registration ID is required for new registrations. Please register again if you lost it."
+				);
 			}
 			payload = {
 				email,
@@ -473,6 +488,13 @@ export async function resendOTP(client, email, registrationId = null, session = 
  * @param {string} password - Password
  * @returns {object} Result
  */
+/**
+ * Login with email and password
+ * @param {object} client - Nakama client
+ * @param {string} email - Email
+ * @param {string} password - Password
+ * @returns {object} Session result
+ */
 export async function loginWithEmail(client, email, password) {
 	try {
 		if (!client) {
@@ -487,7 +509,7 @@ export async function loginWithEmail(client, email, password) {
 		const platform = getPlatform();
 		const deviceName = getDeviceName();
 
-		// Direct login with email and password (no OTP required)
+		// Direct login with email and password
 		const response = await callUnauthenticatedRpc(client, "auth/login_email", {
 			email,
 			password,
@@ -501,7 +523,6 @@ export async function loginWithEmail(client, email, password) {
 		const sessionData = data.data || data;
 
 		// Create a session object from the response
-		// Backend SessionInfo has: userId, username, sessionToken, expiresAt
 		const session = {
 			token:
 				sessionData.sessionToken ||
@@ -672,44 +693,54 @@ export async function verifyLoginOTP(client, email, otp) {
 // ========================================
 
 /**
- * Login with Google OAuth
+ * Login with Google OAuth (unified endpoint)
+ * UNIFIED ENDPOINT: Supports both authenticated (account upgrade) and unauthenticated (new login) calls
+ * - If authenticated (session provided): Upgrades guest account to Google account (preserves username)
+ * - If unauthenticated: Creates new account or logs in existing Firebase user
  * @param {object} client - Nakama client
  * @param {string} idToken - Google ID token
  * @param {object} existingSession - Optional: existing session for account upgrade
  * @returns {object} Session and user data
  */
-export async function loginWithGoogle(
-	client,
-	idToken,
-	existingSession = null,
-	socket = null
-) {
+export async function loginWithGoogle(client, idToken, existingSession = null) {
+	if (!client) {
+		throw new Error("Nakama client is not initialized");
+	}
+	if (!idToken) {
+		throw new Error("Google ID token is required");
+	}
+
+	const payload = {
+		id_token: idToken,
+	};
+
 	let response;
 
-	// Check if user is already logged in (account upgrade flow)
-	if (existingSession && existingSession.token && socket) {
+	// Use unified auth/firebase_login endpoint
+	// Backend automatically detects if user is authenticated from session context
+	if (existingSession && existingSession.token) {
 		console.log(
 			"🔄 User already logged in - upgrading account with Google login"
 		);
 		console.log("🔄 Existing UserID:", existingSession.user_id);
 		console.log("🔄 Existing Username:", existingSession.username);
 
-		// Call as authenticated RPC via socket - backend will extract userID from session token
+		// Call as authenticated RPC - backend will extract userID from session token
 		// This triggers account upgrade flow (preserves username and all data)
-		// Note: socket.rpc() expects payload as JSON string
-		response = await socket.rpc(
-			"auth/google_login",
-			JSON.stringify({
-				id_token: idToken,
-			})
+		response = await client.rpc(
+			existingSession,
+			"auth/firebase_login",
+			payload
 		);
 	} else {
 		console.log("🆕 New user or not logged in - creating/logging in account");
 
 		// Call as unauthenticated RPC - backend will create new account or login
-		response = await callUnauthenticatedRpc(client, "auth/google_login", {
-			id_token: idToken,
-		});
+		response = await callUnauthenticatedRpc(
+			client,
+			"auth/firebase_login",
+			payload
+		);
 	}
 
 	const data = parseRpcResponse(response);
@@ -806,7 +837,11 @@ export async function verifyEmailLink(client, session, otp) {
  */
 export async function getUserProfile(client, session, targetUserId = null) {
 	const payload = targetUserId ? { target_user_id: targetUserId } : {};
-	const response = await client.rpc(session, "social/get_profile_info", payload);
+	const response = await client.rpc(
+		session,
+		"social/get_profile_info",
+		payload
+	);
 	const data = parseRpcResponse(response);
 	return data.data || data;
 }
@@ -880,6 +915,74 @@ export async function getOnlineStatus(client, session, userIds) {
  */
 export async function getOnlineFriends(client, session) {
 	const response = await client.rpc(session, "presence/get_online_friends", {});
+	const data = parseRpcResponse(response);
+	return data.data || data;
+}
+
+// ========================================
+// ACCOUNT DELETION
+// ========================================
+
+/**
+ * Request account deletion (14-day grace period)
+ * @param {object} client - Nakama client
+ * @param {object} session - Current session
+ * @returns {object} Result
+ */
+export async function requestAccountDeletion(client, session) {
+	const response = await client.rpc(
+		session,
+		"auth/request_account_deletion",
+		{}
+	);
+	const data = parseRpcResponse(response);
+	return data.data || data;
+}
+
+/**
+ * Get account deletion status
+ * @param {object} client - Nakama client
+ * @param {object} session - Current session
+ * @returns {object} Deletion status
+ */
+export async function getDeletionStatus(client, session) {
+	const response = await client.rpc(session, "auth/get_deletion_status", {});
+	const data = parseRpcResponse(response);
+	return data.data || data;
+}
+
+// ========================================
+// ACCOUNT CHANGE
+// ========================================
+
+/**
+ * Change account to email
+ * @param {object} client - Nakama client
+ * @param {object} session - Current session
+ * @param {string} email - New email
+ * @param {string} password - Password for new email
+ * @returns {object} Result
+ */
+export async function changeAccountEmail(client, session, email, password) {
+	const response = await client.rpc(session, "auth/change_account_email", {
+		email,
+		password,
+	});
+	const data = parseRpcResponse(response);
+	return data.data || data;
+}
+
+/**
+ * Change account to Google
+ * @param {object} client - Nakama client
+ * @param {object} session - Current session
+ * @param {string} idToken - Google ID token
+ * @returns {object} Result with updated profile
+ */
+export async function changeAccountGoogle(client, session, idToken) {
+	const response = await client.rpc(session, "auth/change_account_google", {
+		id_token: idToken,
+	});
 	const data = parseRpcResponse(response);
 	return data.data || data;
 }

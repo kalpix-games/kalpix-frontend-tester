@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { getUserProfile, updateUserProfile } from "../utils/authClient";
+import { getUserProfile, updateUserProfile, getDeletionStatus } from "../utils/authClient";
+import AccountChangeModal from "../components/AccountChangeModal";
+import AccountDeletionModal from "../components/AccountDeletionModal";
 import "./ProfilePage.css";
 
 // Country code to flag emoji converter
@@ -16,12 +18,15 @@ const getCountryFlag = (countryCode) => {
  * Profile Page Component
  * Displays and allows editing of user profile information
  */
-function ProfilePage({ client, session }) {
+function ProfilePage({ client, session, socket, onSessionUpdate }) {
 	const [profile, setProfile] = useState(null);
 	const [loading, setLoading] = useState(true);
 	const [editing, setEditing] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
+	const [deletionStatus, setDeletionStatus] = useState(null);
+	const [showChangeModal, setShowChangeModal] = useState(false);
+	const [showDeletionModal, setShowDeletionModal] = useState(false);
 
 	// Form state
 	const [formData, setFormData] = useState({
@@ -30,9 +35,10 @@ function ProfilePage({ client, session }) {
 		country: "",
 	});
 
-	// Load profile on mount
+	// Load profile and deletion status on mount
 	useEffect(() => {
 		loadProfile();
+		loadDeletionStatus();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
@@ -52,6 +58,30 @@ function ProfilePage({ client, session }) {
 		} finally {
 			setLoading(false);
 		}
+	};
+
+	const loadDeletionStatus = async () => {
+		try {
+			const status = await getDeletionStatus(client, session);
+			setDeletionStatus(status);
+		} catch (err) {
+			console.error("Failed to load deletion status:", err);
+		}
+	};
+
+	const handleAccountChanged = async (newSession) => {
+		if (onSessionUpdate) {
+			onSessionUpdate(newSession);
+		}
+		await loadProfile();
+		setSuccess("Account changed successfully!");
+		setTimeout(() => setSuccess(""), 3000);
+	};
+
+	const handleDeletionRequested = async () => {
+		await loadDeletionStatus();
+		setSuccess("Account deletion requested. You can cancel by logging in before the scheduled date.");
+		setTimeout(() => setSuccess(""), 5000);
 	};
 
 	const handleInputChange = (e) => {
@@ -227,7 +257,49 @@ function ProfilePage({ client, session }) {
 									)}
 								</span>
 							</div>
+
+							{profile.email && (
+								<div className="info-row">
+									<label>Email:</label>
+									<span className="info-value">{profile.email}</span>
+								</div>
+							)}
 						</div>
+
+						{/* Account Deletion Status */}
+						{deletionStatus?.isScheduled && (
+							<div className="deletion-warning-banner">
+								<div className="warning-icon">⏰</div>
+								<div className="warning-content">
+									<h4>Account Deletion Scheduled</h4>
+									<p>
+										Your account is scheduled for deletion. You can cancel by
+										logging in before the scheduled date.
+									</p>
+								</div>
+							</div>
+						)}
+
+						{/* Account Settings Section */}
+						{profile.isVerified && (
+							<div className="account-settings-section">
+								<h3>Account Settings</h3>
+								<div className="settings-actions">
+									<button
+										onClick={() => setShowChangeModal(true)}
+										className="btn-secondary"
+									>
+										🔄 Change Account
+									</button>
+									<button
+										onClick={() => setShowDeletionModal(true)}
+										className="btn-danger-outline"
+									>
+										🗑️ Delete Account
+									</button>
+								</div>
+							</div>
+						)}
 
 						{/* Action Buttons */}
 						<div className="profile-actions">
@@ -258,6 +330,27 @@ function ProfilePage({ client, session }) {
 							)}
 						</div>
 					</div>
+				)}
+
+				{/* Account Change Modal */}
+				{showChangeModal && (
+					<AccountChangeModal
+						client={client}
+						session={session}
+						socket={socket}
+						onClose={() => setShowChangeModal(false)}
+						onChanged={handleAccountChanged}
+					/>
+				)}
+
+				{/* Account Deletion Modal */}
+				{showDeletionModal && (
+					<AccountDeletionModal
+						client={client}
+						session={session}
+						onClose={() => setShowDeletionModal(false)}
+						onDeletionRequested={handleDeletionRequested}
+					/>
 				)}
 			</div>
 		</div>

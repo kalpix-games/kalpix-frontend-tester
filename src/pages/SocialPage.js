@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import "./SocialPage.css";
 import {
 	createPost,
@@ -19,6 +19,8 @@ import {
 	useNotifications,
 	subscribeToEvent,
 } from "../contexts/NotificationContext";
+import { usePagination } from "../hooks/usePagination";
+import { InfiniteScrollWindow } from "../components/InfiniteScroll";
 
 /**
  * Social Page Component
@@ -28,13 +30,12 @@ function SocialPage({ client, session, socket, isConnected }) {
 	useNotifications(); // Subscribe to notifications context
 	const [activeTab, setActiveTab] = useState("feed"); // 'feed' or 'news'
 	const [feedType, setFeedType] = useState("discover"); // 'foryou' or 'discover'
-	const [posts, setPosts] = useState([]);
 	const [news, setNews] = useState([]);
 	const [newPostContent, setNewPostContent] = useState("");
 	const [postVisibility, setPostVisibility] = useState("public"); // 'public', 'followers', 'friends', 'private'
-	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
+	const [creatingPost, setCreatingPost] = useState(false);
 
 	// Comments modal state
 	const [commentsModalOpen, setCommentsModalOpen] = useState(false);
@@ -62,21 +63,49 @@ function SocialPage({ client, session, socket, isConnected }) {
 	const [replyingTo, setReplyingTo] = useState(null); // { commentId, username }
 	const [loadingComments, setLoadingComments] = useState(false);
 
-	// Load posts, news and stories on mount
+	// Create fetch function for pagination based on feed type
+	const fetchFeed = useCallback(
+		async (cursor, limit) => {
+			if (feedType === "discover") {
+				return await getPublicFeed(client, session, limit, cursor || "");
+			} else {
+				return await getUserFeed(client, session, limit, cursor || "");
+			}
+		},
+		[client, session, feedType]
+	);
+
+	// Use pagination hook for feed
+	const {
+		items: posts,
+		loading,
+		loadingMore,
+		hasMore,
+		loadMore,
+		reset: resetFeed,
+		setItems: setPosts,
+	} = usePagination(fetchFeed, {
+		defaultLimit: 20,
+		autoLoad: true,
+		onError: (err) => {
+			setError(err.message || "Failed to load feed");
+		},
+	});
+
+	// Reset feed when feed type changes
 	useEffect(() => {
-		loadFeed();
+		if (activeTab === "feed") {
+			resetFeed();
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [feedType]);
+
+	// Load news and stories on mount
+	useEffect(() => {
 		loadNews();
 		loadStoryTray();
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
-
-	// Reload feed when feed type changes
-	useEffect(() => {
-		if (activeTab === "feed") {
-			loadFeed();
-		}
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [feedType]);
 
 	// Subscribe to real-time events
 	useEffect(() => {
@@ -85,9 +114,9 @@ function SocialPage({ client, session, socket, isConnected }) {
 			console.log("📝 Real-time new post:", content);
 			if (activeTab === "feed") {
 				if (feedType === "discover" && content.visibility === "public") {
-					loadFeed();
+					resetFeed();
 				} else if (feedType === "foryou") {
-					loadFeed();
+					resetFeed();
 				}
 			}
 		});
@@ -139,27 +168,6 @@ function SocialPage({ client, session, socket, isConnected }) {
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [activeTab, feedType, selectedPost]);
 
-	// Load feed posts based on feed type
-	const loadFeed = async () => {
-		setLoading(true);
-		setError("");
-		try {
-			let data;
-			if (feedType === "discover") {
-				// Discover: All public posts from all users
-				data = await getPublicFeed(client, session, 50);
-			} else {
-				// For You: Posts from users you follow
-				data = await getUserFeed(client, session, 50);
-			}
-			setPosts(data.posts || []);
-		} catch (err) {
-			console.error("Failed to load feed:", err);
-			setError(err.message || "Failed to load feed");
-		} finally {
-			setLoading(false);
-		}
-	};
 
 	// Load story tray for the current user
 	const loadStoryTray = async () => {
@@ -394,7 +402,7 @@ function SocialPage({ client, session, socket, isConnected }) {
 			return;
 		}
 
-		setLoading(true);
+		setCreatingPost(true);
 		setError("");
 		setSuccess("");
 		try {
@@ -404,16 +412,19 @@ function SocialPage({ client, session, socket, isConnected }) {
 				newPostContent,
 				postVisibility
 			);
-			setPosts([newPost, ...posts]);
+			// Add new post to the beginning of the list
+			setPosts((prev) => [newPost, ...prev]);
 			setNewPostContent("");
 			setPostVisibility("public");
 			setSuccess("Post created successfully!");
 			setTimeout(() => setSuccess(""), 3000);
+			// Optionally refresh feed to get updated counts
+			resetFeed();
 		} catch (err) {
 			console.error("Failed to create post:", err);
 			setError(err.message || "Failed to create post");
 		} finally {
-			setLoading(false);
+			setCreatingPost(false);
 		}
 	};
 
@@ -660,7 +671,7 @@ function SocialPage({ client, session, socket, isConnected }) {
 							</div>
 							<button
 								className="refresh-btn"
-								onClick={loadFeed}
+								onClick={resetFeed}
 								disabled={loading}
 								title="Refresh feed"
 							>
@@ -1015,18 +1026,34 @@ function SocialPage({ client, session, socket, isConnected }) {
 						</div>
 
 						{/* Posts List */}
-						<div className="posts-list">
-							{loading && posts.length === 0 ? (
+						<InfiniteScrollWindow
+							onLoadMore={loadMore}
+							hasMore={hasMore}
+							loading={loadingMore}
+							loadingComponent={
 								<div className="loading-state">
 									<div className="spinner"></div>
-									<p>Loading posts...</p>
+									<p>Loading more posts...</p>
 								</div>
-							) : posts.length === 0 ? (
+							}
+							endMessage={
 								<div className="empty-state">
-									<p>No posts yet. Follow users to see their posts here!</p>
+									<p>No more posts to load</p>
 								</div>
-							) : (
-								posts.map((post) => {
+							}
+						>
+							<div className="posts-list">
+								{loading && posts.length === 0 ? (
+									<div className="loading-state">
+										<div className="spinner"></div>
+										<p>Loading posts...</p>
+									</div>
+								) : posts.length === 0 ? (
+									<div className="empty-state">
+										<p>No posts yet. Follow users to see their posts here!</p>
+									</div>
+								) : (
+									posts.map((post) => {
 									const postId = post.postId || post.id;
 									const username = post.username || post.author;
 									const displayName = post.displayName || post.author;
@@ -1112,7 +1139,8 @@ function SocialPage({ client, session, socket, isConnected }) {
 									);
 								})
 							)}
-						</div>
+							</div>
+						</InfiniteScrollWindow>
 					</div>
 				)}
 

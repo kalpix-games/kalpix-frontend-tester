@@ -6,8 +6,8 @@ import {
 	verifyRegistrationOTP,
 	resendOTP,
 	checkUsernameAvailable,
-	loginWithEmail,
 	loginWithGoogle,
+	loginWithEmail,
 	loginAsGuest,
 	linkEmail,
 	verifyEmailLink,
@@ -64,12 +64,6 @@ function AuthTester({
 			}
 		}
 	}, [registrationStep, registerForm.email, registerForm.registrationId]);
-
-	// Email login state
-	const [loginForm, setLoginForm] = useState({
-		email: "",
-		password: "",
-	});
 
 	// Forgot password state
 	const [forgotPasswordStep, setForgotPasswordStep] = useState("email"); // 'email' | 'forgot' | 'otp' | 'success'
@@ -345,44 +339,37 @@ function AuthTester({
 	// ========================================
 	// EMAIL LOGIN
 	// ========================================
-	const handleLoginEmail = async () => {
+	const [loginForm, setLoginForm] = useState({
+		email: "",
+		password: "",
+	});
+
+	const handleEmailLogin = async () => {
 		if (!client) {
 			showStatus("error", "Client not initialized. Please refresh the page.");
 			return;
 		}
 
-		// Validate inputs
 		if (!loginForm.email || !loginForm.password) {
-			showStatus("error", "Please enter both email and password");
+			showStatus("error", "Email and password are required");
 			return;
 		}
 
 		setLoading(true);
 		try {
-			const result = await loginWithEmail(
-				client,
-				loginForm.email,
-				loginForm.password
-			);
-			setSession(result.session);
-			showStatus("success", `Welcome back ${result.data.username}!`);
-			if (onAuthSuccess) onAuthSuccess(result.session);
-		} catch (error) {
-			console.error("Login email error:", error);
-
-			// Check if it's an authentication error (email not registered)
-			if (
-				error.message &&
-				(error.message.includes("Email not registered") ||
-					error.message.includes("incorrect password"))
-			) {
-				showStatus(
-					"error",
-					"Email not registered or incorrect password. Please check your credentials or register a new account."
-				);
-			} else {
-				showStatus("error", error.message || "Failed to login");
+			const result = await loginWithEmail(client, loginForm.email, loginForm.password);
+			
+			if (result.session) {
+				setSession(result.session);
+				showStatus("success", "Login successful!");
+				
+				if (onAuthSuccess) {
+					onAuthSuccess(result.session, result.data);
+				}
 			}
+		} catch (error) {
+			console.error("Email login error:", error);
+			showStatus("error", error.message || "Login failed. Please check your credentials.");
 		} finally {
 			setLoading(false);
 		}
@@ -479,8 +466,8 @@ function AuthTester({
 		}
 		setLoading(true);
 		try {
-			// Pass existing session and socket for account upgrade (if user is already logged in)
-			const result = await loginWithGoogle(client, idToken, session, socket);
+			// Pass existing session for account upgrade (backend automatically detects authentication)
+			const result = await loginWithGoogle(client, idToken, session);
 
 			// Check if this was an account upgrade
 			if (session && session.user_id === result.session.user_id) {
@@ -822,16 +809,16 @@ function AuthTester({
 					👤 Guest Login
 				</button>
 				<button
+					className={activeTab === "login" ? "active" : ""}
+					onClick={() => setActiveTab("login")}
+				>
+					🔐 Email Login
+				</button>
+				<button
 					className={activeTab === "register" ? "active" : ""}
 					onClick={() => setActiveTab("register")}
 				>
 					📝 Register
-				</button>
-				<button
-					className={activeTab === "login" ? "active" : ""}
-					onClick={() => setActiveTab("login")}
-				>
-					🔑 Email Login
 				</button>
 				<button
 					className={activeTab === "google" ? "active" : ""}
@@ -869,6 +856,58 @@ function AuthTester({
 						>
 							🚀 Login as Guest
 						</button>
+					</div>
+				)}
+
+				{/* Email Login Tab */}
+				{activeTab === "login" && (
+					<div className="card">
+						<h3>🔐 Login with Email</h3>
+						<p>Enter your email and password to login to your account.</p>
+
+						<div className="form-group">
+							<label>Email:</label>
+							<input
+								type="email"
+								value={loginForm.email}
+								onChange={(e) =>
+									setLoginForm({ ...loginForm, email: e.target.value })
+								}
+								placeholder="your@email.com"
+							/>
+						</div>
+
+						<div className="form-group">
+							<label>Password:</label>
+							<input
+								type="password"
+								value={loginForm.password}
+								onChange={(e) =>
+									setLoginForm({ ...loginForm, password: e.target.value })
+								}
+								placeholder="Your password"
+							/>
+						</div>
+
+						<button
+							onClick={handleEmailLogin}
+							disabled={loading || !loginForm.email || !loginForm.password}
+							className="btn-primary"
+						>
+							{loading ? "Logging in..." : "🔐 Login"}
+						</button>
+
+						<div style={{ marginTop: "10px" }}>
+							<button
+								onClick={() => {
+									setForgotPasswordStep("email");
+									setActiveTab("forgot");
+								}}
+								className="btn-link"
+							>
+								Forgot Password?
+							</button>
+						</div>
 					</div>
 				)}
 
@@ -1046,176 +1085,6 @@ function AuthTester({
 					</div>
 				)}
 
-				{/* Email Login Tab */}
-				{activeTab === "login" && (
-					<div className="card">
-						<h3>🔑 Login with Email</h3>
-
-						{forgotPasswordStep === "email" && (
-							<>
-								<p className="info-text">
-									🔒 Enter your email and password to login
-								</p>
-								<div>
-									<div className="form-group">
-										<label>Email:</label>
-										<input
-											type="email"
-											value={loginForm.email}
-											onChange={(e) =>
-												setLoginForm({ ...loginForm, email: e.target.value })
-											}
-											placeholder="your@email.com"
-										/>
-									</div>
-									<div className="form-group">
-										<label>Password:</label>
-										<input
-											type="password"
-											value={loginForm.password}
-											onChange={(e) =>
-												setLoginForm({ ...loginForm, password: e.target.value })
-											}
-											placeholder="Your password"
-										/>
-									</div>
-									<button
-										onClick={handleLoginEmail}
-										disabled={loading}
-										className="btn-primary"
-									>
-										{loading ? "Logging in..." : "🔑 Login"}
-									</button>
-									<button
-										onClick={() => {
-											setForgotPasswordStep("forgot");
-											setForgotPasswordForm({
-												...forgotPasswordForm,
-												email: loginForm.email,
-											});
-										}}
-										className="btn-secondary"
-										style={{ marginTop: "10px" }}
-									>
-										🔓 Forgot Password?
-									</button>
-									<p className="help-text">
-										Login directly with your email and password
-									</p>
-								</div>
-							</>
-						)}
-
-						{forgotPasswordStep === "forgot" && (
-							<>
-								<p className="info-text">
-									📧 Enter your email to receive a password reset code
-								</p>
-								<div>
-									<div className="form-group">
-										<label>Email:</label>
-										<input
-											type="email"
-											value={forgotPasswordForm.email}
-											onChange={(e) =>
-												setForgotPasswordForm({
-													...forgotPasswordForm,
-													email: e.target.value,
-												})
-											}
-											placeholder="your@email.com"
-										/>
-									</div>
-									<button
-										onClick={handleForgotPassword}
-										disabled={loading}
-										className="btn-primary"
-									>
-										{loading ? "Sending..." : "📨 Send Reset Code"}
-									</button>
-									<button
-										onClick={() => setForgotPasswordStep("email")}
-										className="btn-secondary"
-									>
-										← Back to Login
-									</button>
-								</div>
-							</>
-						)}
-
-						{forgotPasswordStep === "otp" && (
-							<>
-								<p className="info-text">
-									🔐 Enter the code sent to your email and your new password
-								</p>
-								<div>
-									<div className="form-group">
-										<label>Reset Code (OTP):</label>
-										<input
-											type="text"
-											value={forgotPasswordForm.otp}
-											onChange={(e) =>
-												setForgotPasswordForm({
-													...forgotPasswordForm,
-													otp: e.target.value,
-												})
-											}
-											placeholder="123456"
-											maxLength="6"
-										/>
-									</div>
-									<div className="form-group">
-										<label>New Password:</label>
-										<input
-											type="password"
-											value={forgotPasswordForm.newPassword}
-											onChange={(e) =>
-												setForgotPasswordForm({
-													...forgotPasswordForm,
-													newPassword: e.target.value,
-												})
-											}
-											placeholder="At least 8 characters"
-										/>
-									</div>
-									<div className="form-group">
-										<label>Confirm Password:</label>
-										<input
-											type="password"
-											value={forgotPasswordForm.confirmPassword}
-											onChange={(e) =>
-												setForgotPasswordForm({
-													...forgotPasswordForm,
-													confirmPassword: e.target.value,
-												})
-											}
-											placeholder="Re-enter password"
-										/>
-									</div>
-									<button
-										onClick={handleResetPassword}
-										disabled={loading}
-										className="btn-primary"
-									>
-										{loading ? "Resetting..." : "🔒 Reset Password"}
-									</button>
-									<button
-										onClick={() => setForgotPasswordStep("forgot")}
-										className="btn-secondary"
-									>
-										← Back
-									</button>
-								</div>
-							</>
-						)}
-
-						{forgotPasswordStep === "success" && (
-							<div className="success-text">
-								✅ Password reset successful! Redirecting to login...
-							</div>
-						)}
-					</div>
-				)}
 
 				{/* Google Login Tab */}
 				{activeTab === "google" && (

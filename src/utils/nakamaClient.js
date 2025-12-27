@@ -428,17 +428,19 @@ export async function addComment(
 }
 
 /**
- * Get comments for a post
+ * Get comments for a post with pagination
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @param {string} postId - Post ID
  * @param {number} limit - Number of comments to fetch
+ * @param {number} offset - Offset for pagination
  * @returns {object} Comments data
  */
-export async function getComments(client, session, postId, limit = 20) {
+export async function getComments(client, session, postId, limit = 20, offset = 0) {
 	const response = await client.rpc(session, "social/get_comments", {
 		post_id: postId,
 		limit,
+		offset,
 	});
 	return parseRpcResponse(response);
 }
@@ -499,17 +501,19 @@ export async function getFollowRequests(client, session) {
 }
 
 /**
- * Search users
+ * Search users with pagination
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
  * @param {string} query - Search query
  * @param {number} limit - Number of results
- * @returns {object} Search results
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Search results with pagination
  */
-export async function searchUsers(client, session, query, limit = 20) {
+export async function searchUsers(client, session, query, limit = 20, cursor = "") {
 	const response = await client.rpc(session, "social/search_users", {
 		query,
 		limit,
+		cursor,
 	});
 	return parseRpcResponse(response);
 }
@@ -568,24 +572,59 @@ export async function unfollow(client, session, targetUserId) {
 }
 
 /**
- * Get followers list
+ * Get followers list with pagination
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
- * @returns {object} Followers list
+ * @param {string} targetUserId - User ID (optional, defaults to current user)
+ * @param {number} limit - Number of results
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Followers list with pagination
  */
-export async function getFollowers(client, session) {
-	const response = await client.rpc(session, "social/get_followers", {});
+export async function getFollowers(client, session, targetUserId = null, limit = 20, cursor = "") {
+	const payload = { limit, cursor };
+	if (targetUserId) {
+		payload.target_user_id = targetUserId;
+	}
+	const response = await client.rpc(session, "social/get_followers", payload);
 	return parseRpcResponse(response);
 }
 
 /**
- * Get following list
+ * Get following list with pagination
  * @param {object} client - Nakama client
  * @param {object} session - Nakama session
- * @returns {object} Following list
+ * @param {string} targetUserId - User ID (optional, defaults to current user)
+ * @param {number} limit - Number of results
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Following list with pagination
  */
-export async function getFollowing(client, session) {
-	const response = await client.rpc(session, "social/get_following", {});
+export async function getFollowing(client, session, targetUserId = null, limit = 20, cursor = "") {
+	const payload = { limit, cursor };
+	if (targetUserId) {
+		payload.target_user_id = targetUserId;
+	}
+	const response = await client.rpc(session, "social/get_following", payload);
+	return parseRpcResponse(response);
+}
+
+/**
+ * Get user posts for profile page with pagination
+ * @param {object} client - Nakama client
+ * @param {object} session - Nakama session
+ * @param {string} targetUserId - User ID whose posts to fetch (optional, defaults to current user)
+ * @param {number} limit - Number of posts to fetch
+ * @param {string} cursor - Pagination cursor
+ * @returns {object} Posts data with pagination
+ */
+export async function getUserPosts(client, session, targetUserId = null, limit = 20, cursor = "") {
+	const payload = {
+		limit,
+		cursor,
+	};
+	if (targetUserId) {
+		payload.target_user_id = targetUserId;
+	}
+	const response = await client.rpc(session, "social/get_profile_posts", payload);
 	return parseRpcResponse(response);
 }
 
@@ -898,7 +937,12 @@ export async function getChannels(client, session) {
  * @param {string} cursor - Cursor for pagination (optional)
  * @returns {object} Conversations list with pagination info
  */
-export async function getConversations(client, session, limit = 20, cursor = null) {
+export async function getConversations(
+	client,
+	session,
+	limit = 20,
+	cursor = null
+) {
 	const payload = { limit };
 	if (cursor) {
 		payload.cursor = cursor;

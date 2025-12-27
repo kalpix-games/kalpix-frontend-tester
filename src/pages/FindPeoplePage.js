@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import {
 	searchUsers,
@@ -8,6 +8,8 @@ import {
 	getSentRequests,
 } from "../utils/nakamaClient";
 import { subscribeToEvent } from "../contexts/NotificationContext";
+import { usePagination } from "../hooks/usePagination";
+import { InfiniteScrollWindow } from "../components/InfiniteScroll";
 import "./FindPeoplePage.css";
 
 /**
@@ -16,13 +18,90 @@ import "./FindPeoplePage.css";
 function FindPeoplePage({ client, session }) {
 	const navigate = useNavigate();
 	const [searchQuery, setSearchQuery] = useState("");
-	const [recommendedUsers, setRecommendedUsers] = useState([]);
-	const [searchResults, setSearchResults] = useState([]);
-	const [loading, setLoading] = useState(false);
 	const [followingSet, setFollowingSet] = useState(new Set());
 	const [pendingFollows, setPendingFollows] = useState(new Set()); // User IDs with pending follow requests
 	const [dismissedUsers, setDismissedUsers] = useState(new Set());
 	const [actionLoading, setActionLoading] = useState(null); // Track loading state for individual actions
+
+	// Create fetch function for search results
+	const fetchSearchResults = useCallback(
+		async (cursor, limit) => {
+			if (!searchQuery.trim()) {
+				return { data: { users: [], nextCursor: null, hasMore: false } };
+			}
+			const result = await searchUsers(
+				client,
+				session,
+				searchQuery.trim(),
+				limit,
+				cursor || ""
+			);
+			// Backend returns: { success: true, data: { users: [], nextCursor: "" } }
+			// Add hasMore based on nextCursor
+			if (result.data) {
+				result.data.hasMore = !!(
+					result.data.nextCursor && result.data.nextCursor !== ""
+				);
+			}
+			return result;
+		},
+		[client, session, searchQuery]
+	);
+
+	// Create fetch function for recommended users (empty search)
+	const fetchRecommendedUsers = useCallback(
+		async (cursor, limit) => {
+			const result = await searchUsers(
+				client,
+				session,
+				"",
+				limit,
+				cursor || ""
+			);
+			// Backend returns: { success: true, data: { users: [], nextCursor: "" } }
+			// Add hasMore based on nextCursor
+			if (result.data) {
+				result.data.hasMore = !!(
+					result.data.nextCursor && result.data.nextCursor !== ""
+				);
+			}
+			return result;
+		},
+		[client, session]
+	);
+
+	// Use pagination hook for search results
+	const {
+		items: searchResults,
+		loading: searchLoading,
+		loadingMore: searchLoadingMore,
+		hasMore: searchHasMore,
+		loadMore: loadMoreSearch,
+		reset: resetSearch,
+		load: loadSearch,
+	} = usePagination(fetchSearchResults, {
+		defaultLimit: 20,
+		autoLoad: false, // Don't auto-load, wait for search query
+		onError: (err) => {
+			console.error("Failed to search users:", err);
+		},
+	});
+
+	// Use pagination hook for recommended users
+	const {
+		items: recommendedUsers,
+		loading: recommendedLoading,
+		loadingMore: recommendedLoadingMore,
+		hasMore: recommendedHasMore,
+		loadMore: loadMoreRecommended,
+		reset: resetRecommended,
+	} = usePagination(fetchRecommendedUsers, {
+		defaultLimit: 20,
+		autoLoad: true,
+		onError: (err) => {
+			console.error("Failed to load recommended users:", err);
+		},
+	});
 
 	// Load following list to check follow status
 	const loadFollowing = useCallback(async () => {
@@ -50,72 +129,55 @@ function FindPeoplePage({ client, session }) {
 		}
 	}, [client, session]);
 
-	// Load recommended users (search with empty query or popular users)
-	const loadRecommendedUsers = useCallback(async () => {
-		if (!client || !session) return;
-		setLoading(true);
-		try {
-			// Search for users to get recommendations
-			const result = await searchUsers(client, session, "", 50);
-			console.log("🔍 Search result:", result);
-			const users = result.users || [];
-			console.log("🔍 Users array:", users);
-			if (users.length > 0) {
-				console.log("🔍 First user object:", users[0]);
-			}
-			// Filter out current user and already following
-			const filtered = users.filter(
-				(u) => u.userId !== session.user_id && !followingSet.has(u.userId)
-			);
-			setRecommendedUsers(filtered);
-		} catch (error) {
-			console.error("Failed to load recommended users:", error);
-		} finally {
-			setLoading(false);
-		}
-	}, [client, session, followingSet]);
+	// Reset search when query changes (debounced)
+	const searchQueryRef = useRef("");
+	const debounceTimerRef = useRef(null);
+	const isInitialMount = useRef(true);
 
-	// Search users
-	const handleSearch = useCallback(async () => {
-		if (!client || !session || !searchQuery.trim()) {
-			setSearchResults([]);
+	useEffect(() => {
+		// Skip on initial mount to prevent duplicate calls
+		if (isInitialMount.current) {
+			isInitialMount.current = false;
+			searchQueryRef.current = searchQuery;
 			return;
 		}
-		setLoading(true);
-		try {
-			const result = await searchUsers(client, session, searchQuery.trim(), 20);
-			const users = result.users || [];
-			// Filter out current user
-			const filtered = users.filter((u) => u.userId !== session.user_id);
-			setSearchResults(filtered);
-		} catch (error) {
-			console.error("Failed to search users:", error);
-		} finally {
-			setLoading(false);
+
+		// Clear any existing timer
+		if (debounceTimerRef.current) {
+			clearTimeout(debounceTimerRef.current);
 		}
-	}, [client, session, searchQuery]);
 
-	useEffect(() => {
-		loadFollowing();
-		loadSentRequests();
-	}, [loadFollowing, loadSentRequests]);
-
-	useEffect(() => {
-		if (followingSet.size > 0 || session) {
-			loadRecommendedUsers();
+		// Only trigger if query actually changed
+		if (searchQueryRef.current === searchQuery) {
+			return;
 		}
-	}, [followingSet, session, loadRecommendedUsers]);
+		searchQueryRef.current = searchQuery;
 
-	useEffect(() => {
-		const debounce = setTimeout(() => {
+		// Debounce the search
+		debounceTimerRef.current = setTimeout(() => {
 			if (searchQuery.trim()) {
-				handleSearch();
+				console.log("🔍 Loading search with query:", searchQuery.trim());
+				loadSearch(true); // Load with reset
 			} else {
-				setSearchResults([]);
+				// Clear search results when query is empty - don't call API
+				console.log("🔍 Clearing search results");
 			}
-		}, 300);
-		return () => clearTimeout(debounce);
-	}, [searchQuery, handleSearch]);
+		}, 500); // Debounce to prevent too many requests
+
+		return () => {
+			if (debounceTimerRef.current) {
+				clearTimeout(debounceTimerRef.current);
+			}
+		};
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [searchQuery, loadSearch]);
+
+	useEffect(() => {
+		if (client && session) {
+			loadFollowing();
+			loadSentRequests();
+		}
+	}, [loadFollowing, loadSentRequests, client, session]);
 
 	// Real-time event listeners
 	useEffect(() => {
@@ -195,10 +257,20 @@ function FindPeoplePage({ client, session }) {
 		navigate(`/profile/${userId}`);
 	};
 
-	// Get display users based on search
-	const displayUsers = searchQuery.trim()
-		? searchResults
-		: recommendedUsers.filter((u) => !dismissedUsers.has(u.userId));
+	// Get display users based on search, filter out current user and dismissed users
+	const displayUsers = useMemo(() => {
+		const users = searchQuery.trim() ? searchResults : recommendedUsers;
+		return users.filter(
+			(u) => u.userId !== session?.user_id && !dismissedUsers.has(u.userId)
+		);
+	}, [searchQuery, searchResults, recommendedUsers, dismissedUsers, session]);
+
+	const isLoading = searchQuery.trim() ? searchLoading : recommendedLoading;
+	const isLoadingMore = searchQuery.trim()
+		? searchLoadingMore
+		: recommendedLoadingMore;
+	const hasMore = searchQuery.trim() ? searchHasMore : recommendedHasMore;
+	const loadMore = searchQuery.trim() ? loadMoreSearch : loadMoreRecommended;
 
 	if (!session) {
 		return (
@@ -240,97 +312,119 @@ function FindPeoplePage({ client, session }) {
 			</div>
 
 			{/* Users List */}
-			<div className="users-list">
-				{loading ? (
+			<InfiniteScrollWindow
+				onLoadMore={loadMore}
+				hasMore={hasMore}
+				loading={isLoadingMore}
+				loadingComponent={
 					<div className="users-loading">
 						<div className="spinner"></div>
+						<p>Loading more users...</p>
 					</div>
-				) : displayUsers.length === 0 ? (
-					<div className="users-empty">
-						{searchQuery.trim()
-							? "No users found"
-							: "No recommendations available"}
-					</div>
-				) : (
-					displayUsers.map((user) => {
-						const isFollowing = followingSet.has(user.userId);
-						const isPending = pendingFollows.has(user.userId);
+				}
+				endMessage={
+					displayUsers.length > 0 ? (
+						<div
+							className="users-empty"
+							style={{ padding: "20px", color: "#999" }}
+						>
+							No more users to load
+						</div>
+					) : null
+				}
+			>
+				<div className="users-list">
+					{isLoading && displayUsers.length === 0 ? (
+						<div className="users-loading">
+							<div className="spinner"></div>
+						</div>
+					) : displayUsers.length === 0 ? (
+						<div className="users-empty">
+							{searchQuery.trim()
+								? "No users found"
+								: "No recommendations available"}
+						</div>
+					) : (
+						displayUsers.map((user) => {
+							const isFollowing = followingSet.has(user.userId);
+							const isPending = pendingFollows.has(user.userId);
 
-						return (
-							<div key={user.userId} className="user-item">
-								{/* Avatar - click to view profile */}
-								<div
-									className="user-avatar-wrapper clickable"
-									onClick={(e) => handleAvatarClick(user.userId, e)}
-									title="View profile"
-								>
-									{user.avatarUrl ? (
-										<img
-											src={user.avatarUrl}
-											alt={user.username}
-											className="user-avatar"
-										/>
-									) : (
-										<div className="user-avatar-placeholder">
-											{(user.username || "U")[0].toUpperCase()}
-										</div>
-									)}
-								</div>
-								{/* User info - click to view profile */}
-								<div
-									className="user-info clickable"
-									onClick={(e) => handleAvatarClick(user.userId, e)}
-									title="View profile"
-								>
-									<div className="user-name">
-										{user.displayName || user.username || "Unknown User"}
+							return (
+								<div key={user.userId} className="user-item">
+									{/* Avatar - click to view profile */}
+									<div
+										className="user-avatar-wrapper clickable"
+										onClick={(e) => handleAvatarClick(user.userId, e)}
+										title="View profile"
+									>
+										{user.avatarUrl ? (
+											<img
+												src={user.avatarUrl}
+												alt={user.username}
+												className="user-avatar"
+											/>
+										) : (
+											<div className="user-avatar-placeholder">
+												{(user.username || "U")[0].toUpperCase()}
+											</div>
+										)}
 									</div>
-									{isFollowing && (
-										<div className="user-subtitle">Following</div>
-									)}
-								</div>
-								<div
-									className="user-actions"
-									onClick={(e) => e.stopPropagation()}
-								>
-									{isFollowing ? (
-										<span className="following-badge">Following</span>
-									) : isPending ? (
-										<>
-											<span className="pending-badge">Pending</span>
-											<button
-												className="cancel-btn"
-												onClick={() => handleCancelFollow(user.userId)}
-												disabled={actionLoading === user.userId}
-											>
-												{actionLoading === user.userId ? "..." : "Cancel"}
-											</button>
-										</>
-									) : (
-										<>
-											<button
-												className="follow-btn"
-												onClick={() => handleFollow(user.userId)}
-												disabled={actionLoading === user.userId}
-											>
-												{actionLoading === user.userId ? "..." : "Follow"}
-											</button>
-											{!searchQuery.trim() && (
+									{/* User info - click to view profile */}
+									<div
+										className="user-info clickable"
+										onClick={(e) => handleAvatarClick(user.userId, e)}
+										title="View profile"
+									>
+										<div className="user-name">
+											{user.displayName || user.username || "Unknown User"}
+										</div>
+										{isFollowing && (
+											<div className="user-subtitle">Following</div>
+										)}
+									</div>
+									<div
+										className="user-actions"
+										onClick={(e) => e.stopPropagation()}
+									>
+										{isFollowing ? (
+											<span className="following-badge">Following</span>
+										) : isPending ? (
+											<>
+												<span className="pending-badge">Pending</span>
 												<button
-													className="dismiss-btn"
-													onClick={() => handleDismiss(user.userId)}
+													className="cancel-btn"
+													onClick={() => handleCancelFollow(user.userId)}
+													disabled={actionLoading === user.userId}
 												>
-													×
+													{actionLoading === user.userId ? "..." : "Cancel"}
 												</button>
-											)}
-										</>
-									)}
+											</>
+										) : (
+											<>
+												<button
+													className="follow-btn"
+													onClick={() => handleFollow(user.userId)}
+													disabled={actionLoading === user.userId}
+												>
+													{actionLoading === user.userId ? "..." : "Follow"}
+												</button>
+												{!searchQuery.trim() && (
+													<button
+														className="dismiss-btn"
+														onClick={() => handleDismiss(user.userId)}
+													>
+														×
+													</button>
+												)}
+											</>
+										)}
+									</div>
 								</div>
-							</div>
-						);
-					})
-				)}
-			</div>
+							);
+						})
+					)}
+				</div>
+			</InfiniteScrollWindow>
 		</div>
 	);
 }

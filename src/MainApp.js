@@ -330,7 +330,12 @@ function MainApp() {
 							path="/profile"
 							element={
 								<ProtectedRoute>
-									<ProfilePage client={client} session={session} />
+									<ProfilePage
+										client={client}
+										session={session}
+										socket={socket}
+										onSessionUpdate={setSession}
+									/>
 								</ProtectedRoute>
 							}
 						/>

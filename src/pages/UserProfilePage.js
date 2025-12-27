@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
 	getUserProfile,
@@ -8,8 +8,11 @@ import {
 	unfollow,
 	getFollowing,
 	getSentRequests,
+	getUserPosts,
 } from "../utils/nakamaClient";
 import { subscribeToEvent } from "../contexts/NotificationContext";
+import { usePagination } from "../hooks/usePagination";
+import { InfiniteScrollWindow } from "../components/InfiniteScroll";
 import "./UserProfilePage.css";
 
 // Country code to flag emoji converter
@@ -36,29 +39,29 @@ function UserProfilePage({ client, session }) {
 	const [actionLoading, setActionLoading] = useState(false);
 	const [followStatus, setFollowStatus] = useState("none"); // none, following, pending
 
-	// Sample posts for demo (in real app, fetch from backend)
-	const [posts] = useState([
-		{
-			id: 1,
-			type: "image",
-			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+	// Create fetch function for user posts
+	const fetchUserPosts = useCallback(
+		async (cursor, limit) => {
+			return await getUserPosts(client, session, userId, limit, cursor || "");
 		},
-		{
-			id: 2,
-			type: "image",
-			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
+		[client, session, userId]
+	);
+
+	// Use pagination hook for posts
+	const {
+		items: posts,
+		loading: postsLoading,
+		loadingMore: postsLoadingMore,
+		hasMore: postsHasMore,
+		loadMore: loadMorePosts,
+		reset: resetPosts,
+	} = usePagination(fetchUserPosts, {
+		defaultLimit: 20,
+		autoLoad: true,
+		onError: (err) => {
+			console.error("Failed to load posts:", err);
 		},
-		{
-			id: 3,
-			type: "image",
-			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
-		},
-		{
-			id: 4,
-			type: "image",
-			url: "https://images.unsplash.com/photo-1593062096033-9a26b09da705?w=300",
-		},
-	]);
+	});
 
 	// Load follow status
 	const loadFollowStatus = useCallback(async () => {
@@ -94,6 +97,7 @@ function UserProfilePage({ client, session }) {
 	useEffect(() => {
 		loadProfile();
 		loadFollowStatus();
+		resetPosts(); // Reset posts when userId changes
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [userId]);
 
@@ -280,20 +284,57 @@ function UserProfilePage({ client, session }) {
 	const getTabContent = () => {
 		switch (activeTab) {
 			case "posts":
-				return posts.length > 0 ? (
-					<div className="posts-grid">
-						{posts.map((item) => (
-							<div key={item.id} className="post-item">
-								<img src={item.url} alt="Post" />
+				return (
+					<InfiniteScrollWindow
+						onLoadMore={loadMorePosts}
+						hasMore={postsHasMore}
+						loading={postsLoadingMore}
+						loadingComponent={
+							<div style={{ padding: "20px", textAlign: "center" }}>
+								Loading more posts...
 							</div>
-						))}
-					</div>
-				) : (
-					<div className="tab-empty">
-						<div className="tab-empty-icon">📷</div>
-						<h3>No posts yet</h3>
-						<p>Posts will appear here</p>
-					</div>
+						}
+						endMessage={
+							posts.length > 0 ? (
+								<div style={{ padding: "20px", textAlign: "center", color: "#999" }}>
+									No more posts
+								</div>
+							) : null
+						}
+					>
+						{postsLoading && posts.length === 0 ? (
+							<div className="tab-empty">
+								<div className="tab-empty-icon">⏳</div>
+								<h3>Loading posts...</h3>
+							</div>
+						) : posts.length > 0 ? (
+							<div className="posts-grid">
+								{posts.map((item) => {
+									const postId = item.postId || item.id;
+									const mediaUrl = item.mediaUrl || item.media_url || item.url;
+									return (
+										<div key={postId || item.id} className="post-item">
+											{mediaUrl ? (
+												mediaUrl.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
+													<img src={mediaUrl} alt="Post" />
+												) : (
+													<video src={mediaUrl} controls />
+												)
+											) : (
+												<div className="post-placeholder">📷</div>
+											)}
+										</div>
+									);
+								})}
+							</div>
+						) : (
+							<div className="tab-empty">
+								<div className="tab-empty-icon">📷</div>
+								<h3>No posts yet</h3>
+								<p>Posts will appear here</p>
+							</div>
+						)}
+					</InfiniteScrollWindow>
 				);
 			case "stats":
 				return (

@@ -44,7 +44,7 @@ function SocialSection({ client, session, onEvent }) {
 	const loadFeed = useCallback(async () => {
 		try {
 			setFeedLoading(true);
-			const result = await getUserFeed(client, session, 20);
+			const result = await getUserFeed(client, session, 2);
 			setFeed(result.posts || []);
 			onEvent(
 				"feed_loaded",
@@ -207,7 +207,7 @@ function SocialSection({ client, session, onEvent }) {
 		if (!searchQuery.trim()) return;
 
 		try {
-			const result = await searchUsers(client, session, searchQuery, 20);
+			const result = await searchUsers(client, session, searchQuery, 2);
 			// Remove duplicates based on userId
 			const uniqueUsers = [];
 			const seenIds = new Set();

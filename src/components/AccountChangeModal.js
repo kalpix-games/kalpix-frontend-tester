@@ -2,38 +2,32 @@ import React, { useState } from "react";
 import GoogleLoginButton from "./GoogleLoginButton";
 import {
 	registerEmail,
+	loginWithGoogle,
 	verifyRegistrationOTP,
 	resendOTP,
-	checkUsernameAvailable,
 } from "../utils/authClient";
-import "./AccountUpgradeModal.css";
+import "./AccountChangeModal.css";
 
 /**
- * Account Upgrade Modal Component
- * Allows guest users to upgrade their account via Google or Email
+ * Account Change Modal Component
+ * Allows verified users to change their linked account (email or Google)
  */
-function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
+function AccountChangeModal({ client, session, socket, onClose, onChanged }) {
 	const [method, setMethod] = useState(null); // null | 'google' | 'email'
 	const [step, setStep] = useState("form"); // 'form' | 'otp'
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState("");
 	const [success, setSuccess] = useState("");
 
-	// Get current username from session (for pre-filling)
-	const currentUsername = session?.username || "";
-
-	// Email registration state - start with empty username (user can keep current or change)
+	// Email change state
 	const [formData, setFormData] = useState({
-		username: "",
 		email: "",
 		password: "",
 		otp: "",
-		registrationId: "", // Backend-generated registration ID
+		registrationId: "",
 	});
-	const [usernameAvailable, setUsernameAvailable] = useState(null);
 	const [remainingAttempts, setRemainingAttempts] = useState(null);
 	const [resendCooldown, setResendCooldown] = useState(0);
-	const [usernameChanged, setUsernameChanged] = useState(false); // Track if user changed username
 
 	// Helper functions
 	const extractRemainingAttempts = (errorMessage) => {
@@ -59,48 +53,11 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		}, 1000);
 	};
 
-	// Check username availability
-	const handleCheckUsername = async () => {
-		// If username is empty or unchanged from current username, skip validation
-		if (!formData.username || formData.username === currentUsername) {
-			setUsernameAvailable(null);
-			setError("");
-			return;
-		}
-
-		try {
-			const result = await checkUsernameAvailable(client, formData.username);
-			setUsernameAvailable(result.available);
-			if (!result.available) {
-				setError("This username is already taken");
-			} else {
-				setError("");
-			}
-		} catch (err) {
-			console.error("Check username error:", err);
-		}
-	};
-
-	// Handle username change
-	const handleUsernameChange = (e) => {
-		const newUsername = e.target.value;
-		setFormData({ ...formData, username: newUsername });
-		setUsernameChanged(newUsername !== currentUsername);
-		// Reset availability check when user types
-		setUsernameAvailable(null);
-	};
-
-	// Handle email registration
-	const handleRegisterEmail = async () => {
-		// Email and password are required
+	// Handle email change initiation
+	// Uses unified auth/register_email endpoint (authenticated flow for account change)
+	const handleChangeEmail = async () => {
 		if (!formData.email || !formData.password) {
 			setError("Please fill in email and password");
-			return;
-		}
-
-		// If username was changed, it must be available
-		if (usernameChanged && formData.username && !usernameAvailable) {
-			setError("Please choose an available username");
 			return;
 		}
 
@@ -108,48 +65,31 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// Pass session token for authenticated guest account upgrade
+			// Use unified registerEmail endpoint - backend automatically detects verified account and handles account change
 			const result = await registerEmail(
 				client,
-				formData.username || "", // Optional - can keep current username
+				"", // username not needed for account change
 				formData.email,
 				formData.password,
-				session // Pass session for authenticated upgrade
+				session // Pass session for authenticated account change
 			);
 
-			// Store registrationId from response
-			if (result.registrationId) {
-				setFormData((prev) => ({
-					...prev,
-					registrationId: result.registrationId,
-				}));
-				// Also store in localStorage for persistence
-				localStorage.setItem("pending_registration_id", result.registrationId);
-				localStorage.setItem("pending_registration_email", formData.email);
-			}
-
+			// For account change, we use the authenticated flow which doesn't require registrationId
+			// The email is stored in account metadata and OTP verification uses session
 			setStep("otp");
 			setSuccess(result.message || "OTP sent to your email!");
 			setTimeout(() => setSuccess(""), 3000);
 		} catch (err) {
-			console.error("Register email error:", err);
-			const errorMessage = err.message || "Failed to register";
+			console.error("Change email error:", err);
+			const errorMessage = err.message || "Failed to change account";
 
 			if (
 				errorMessage.includes("already registered") ||
 				errorMessage.includes("Email already exists")
 			) {
 				setError(
-					"This email is already registered. Please use a different email."
+					"This email is already registered by another account. Please use a different email."
 				);
-			} else if (errorMessage.includes("Username already exists")) {
-				setError(
-					"This username is already taken. Please choose a different one."
-				);
-				setUsernameAvailable(false);
-			} else if (errorMessage.includes("Registration already in progress")) {
-				setError("Registration already in progress. Moving to verification...");
-				setStep("otp");
 			} else {
 				setError(errorMessage);
 			}
@@ -158,7 +98,7 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		}
 	};
 
-	// Handle OTP verification
+	// Handle OTP verification for email change
 	const handleVerifyOTP = async () => {
 		if (!formData.otp || formData.otp.length !== 6) {
 			setError("Please enter a valid 6-digit OTP");
@@ -169,32 +109,21 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// For authenticated upgrade, registrationId is not required
+			// For account change (authenticated flow), registrationId is not needed
 			// The backend uses the session token to identify the user
-			// Get registrationId only if available (for unauthenticated flow)
-			const registrationId =
-				formData.registrationId ||
-				localStorage.getItem("pending_registration_id");
-
-			// Verify OTP - pass session for authenticated guest account upgrade
+			// Verify OTP - pass session for authenticated account change
 			const result = await verifyRegistrationOTP(
 				client,
-				formData.email, // Not required for authenticated upgrade, but kept for compatibility
+				formData.email,
 				formData.otp,
-				registrationId || "", // Optional for authenticated upgrade
-				session // Pass session for authenticated upgrade
+				"", // registrationId not needed for authenticated account change
+				session
 			);
 
-			// Clear registrationId from localStorage after successful verification
-			localStorage.removeItem("pending_registration_id");
-			localStorage.removeItem("pending_registration_email");
-
-			setSuccess("Account upgraded successfully!");
+			setSuccess("Account changed successfully!");
 			setTimeout(() => {
-				if (onUpgraded) {
-					// For authenticated upgrade, pass the existing session (not a new one)
-					// The backend returns profile data, not a new session
-					onUpgraded(session);
+				if (onChanged) {
+					onChanged(result.session || session);
 				}
 				onClose();
 			}, 1500);
@@ -205,19 +134,6 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 			const attempts = extractRemainingAttempts(errorMessage);
 			if (attempts !== null) {
 				setRemainingAttempts(attempts);
-			}
-
-			// Handle email claimed by another user
-			if (errorMessage.includes("already been verified by another account")) {
-				setError(
-					"⚠️ This email has been verified by its owner. Please use a different email address."
-				);
-				// Reset to form after 3 seconds
-				setTimeout(() => {
-					setStep("form");
-					setFormData({ ...formData, email: "", otp: "" });
-				}, 3000);
-				return;
 			}
 
 			if (errorMessage.includes("Maximum OTP attempts exceeded")) {
@@ -243,17 +159,11 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		setError("");
 
 		try {
-			// For authenticated upgrade, registrationId is not required
-			// Get registrationId only if available (for unauthenticated flow)
-			const registrationId =
-				formData.registrationId ||
-				localStorage.getItem("pending_registration_id");
-
-			// Pass session for authenticated guest account upgrade
+			// For account change (authenticated flow), registrationId is not needed
 			const result = await resendOTP(
 				client,
 				formData.email,
-				registrationId || "",
+				"", // registrationId not needed for authenticated account change
 				session
 			);
 			setRemainingAttempts(null);
@@ -274,35 +184,41 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		}
 	};
 
-	// Handle Google login
-	const handleGoogleLogin = async (idToken) => {
+	// Handle Google account change
+	// Uses unified auth/firebase_login endpoint (authenticated flow for account change)
+	const handleGoogleChange = async (idToken) => {
 		setLoading(true);
 		setError("");
 
 		try {
-			// Import loginWithGoogle dynamically to avoid circular dependency
-			const { loginWithGoogle } = await import("../utils/authClient");
-			// Pass existing session for account upgrade (backend automatically detects authentication)
-			const result = await loginWithGoogle(client, idToken, session);
+			// Use unified loginWithGoogle endpoint - backend automatically detects verified account and handles account change
+			const result = await loginWithGoogle(
+				client,
+				idToken,
+				session // Pass session for authenticated account change
+			);
 
-			// Verify username was preserved
-			if (session && session.username === result.session.username) {
-				setSuccess(
-					`✅ Account upgraded! Username preserved: ${result.session.username}`
-				);
-			} else {
-				setSuccess("Account upgraded with Google!");
-			}
-
+			setSuccess("Account changed to Google successfully!");
 			setTimeout(() => {
-				if (onUpgraded) {
-					onUpgraded(result.session);
+				if (onChanged) {
+					onChanged(result.session || session);
 				}
 				onClose();
 			}, 1500);
 		} catch (err) {
-			console.error("Google login error:", err);
-			setError(err.message || "Failed to login with Google");
+			console.error("Google change error:", err);
+			const errorMessage = err.message || "Failed to change account";
+
+			if (
+				errorMessage.includes("already registered") ||
+				errorMessage.includes("already linked")
+			) {
+				setError(
+					"This Google account is already registered by another account. Please use a different Google account."
+				);
+			} else {
+				setError(errorMessage);
+			}
 		} finally {
 			setLoading(false);
 		}
@@ -317,11 +233,11 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		return (
 			<div className="modal-overlay" onClick={onClose}>
 				<div
-					className="modal-content upgrade-modal"
+					className="modal-content change-account-modal"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<div className="modal-header">
-						<h2>Secure Your Account</h2>
+						<h2>Change Account</h2>
 						<button className="modal-close" onClick={onClose}>
 							×
 						</button>
@@ -329,8 +245,8 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 
 					<div className="modal-body">
 						<p className="modal-description">
-							Choose how you'd like to secure your account and save your
-							progress:
+							Change your linked account. Your old account will be unlinked and
+							can be used by others.
 						</p>
 
 						<div className="method-selection">
@@ -339,8 +255,8 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 								onClick={() => setMethod("google")}
 							>
 								<div className="method-icon">🔵</div>
-								<h3>Continue with Google</h3>
-								<p>Quick and secure sign-in with your Google account</p>
+								<h3>Change to Google</h3>
+								<p>Link your account with a Google account</p>
 							</button>
 
 							<button
@@ -348,8 +264,8 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 								onClick={() => setMethod("email")}
 							>
 								<div className="method-icon">📧</div>
-								<h3>Register with Email</h3>
-								<p>Create an account with your email and password</p>
+								<h3>Change to Email</h3>
+								<p>Link your account with an email and password</p>
 							</button>
 						</div>
 					</div>
@@ -358,16 +274,16 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		);
 	}
 
-	// Render Google login
+	// Render Google change
 	if (method === "google") {
 		return (
 			<div className="modal-overlay" onClick={onClose}>
 				<div
-					className="modal-content upgrade-modal"
+					className="modal-content change-account-modal"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<div className="modal-header">
-						<h2>Sign in with Google</h2>
+						<h2>Change to Google Account</h2>
 						<button className="modal-close" onClick={onClose}>
 							×
 						</button>
@@ -379,7 +295,7 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 
 						<div className="google-login-container">
 							<GoogleLoginButton
-								onSuccess={handleGoogleLogin}
+								onSuccess={handleGoogleChange}
 								onError={handleGoogleError}
 							/>
 						</div>
@@ -396,12 +312,12 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		);
 	}
 
-	// Render email registration - OTP step
+	// Render email change - OTP step
 	if (method === "email" && step === "otp") {
 		return (
 			<div className="modal-overlay" onClick={onClose}>
 				<div
-					className="modal-content upgrade-modal"
+					className="modal-content change-account-modal"
 					onClick={(e) => e.stopPropagation()}
 				>
 					<div className="modal-header">
@@ -448,7 +364,7 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 								disabled={loading || !formData.otp || formData.otp.length !== 6}
 								className="btn-primary"
 							>
-								{loading ? "Verifying..." : "✅ Verify & Upgrade"}
+								{loading ? "Verifying..." : "✅ Verify & Change"}
 							</button>
 						</div>
 
@@ -479,15 +395,15 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 		);
 	}
 
-	// Render email registration - Form step
+	// Render email change - Form step
 	return (
 		<div className="modal-overlay" onClick={onClose}>
 			<div
-				className="modal-content upgrade-modal"
+				className="modal-content change-account-modal"
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="modal-header">
-					<h2>Register with Email</h2>
+					<h2>Change to Email Account</h2>
 					<button className="modal-close" onClick={onClose}>
 						×
 					</button>
@@ -496,49 +412,6 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 				<div className="modal-body">
 					{error && <div className="alert alert-error">{error}</div>}
 					{success && <div className="alert alert-success">{success}</div>}
-
-					<div className="form-group">
-						<label>
-							Username:{" "}
-							<span style={{ color: "#666", fontWeight: "normal" }}>
-								(Optional)
-							</span>
-						</label>
-						<input
-							type="text"
-							value={formData.username}
-							onChange={handleUsernameChange}
-							onBlur={handleCheckUsername}
-							placeholder={
-								currentUsername
-									? `Leave empty to keep: ${currentUsername}`
-									: "Leave empty for auto-generated username"
-							}
-							className="form-input"
-						/>
-						{!formData.username && currentUsername && (
-							<small
-								style={{
-									color: "#4caf50",
-									fontSize: "12px",
-									marginTop: "4px",
-									display: "block",
-								}}
-							>
-								✅ Will keep your current username:{" "}
-								<strong>{currentUsername}</strong>
-							</small>
-						)}
-						{formData.username &&
-							formData.username !== currentUsername &&
-							usernameAvailable !== null && (
-								<small
-									className={usernameAvailable ? "text-success" : "text-error"}
-								>
-									{usernameAvailable ? "✅ Available" : "❌ Taken"}
-								</small>
-							)}
-					</div>
 
 					<div className="form-group">
 						<label>
@@ -574,11 +447,8 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 
 					<div className="modal-actions">
 						<button
-							onClick={handleRegisterEmail}
-							disabled={
-								loading ||
-								(usernameChanged && formData.username && !usernameAvailable)
-							}
+							onClick={handleChangeEmail}
+							disabled={loading || !formData.email || !formData.password}
 							className="btn-primary"
 						>
 							{loading ? "Sending..." : "📧 Send OTP"}
@@ -593,4 +463,4 @@ function AccountUpgradeModal({ client, session, socket, onClose, onUpgraded }) {
 	);
 }
 
-export default AccountUpgradeModal;
+export default AccountChangeModal;
