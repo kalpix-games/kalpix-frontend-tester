@@ -53,11 +53,17 @@ function AuthTester({
 	// Restore registrationId from localStorage when step changes to OTP
 	useEffect(() => {
 		if (registrationStep === "otp") {
-			const savedRegistrationId = localStorage.getItem('pending_registration_id');
-			const savedEmail = localStorage.getItem('pending_registration_email');
-			
-			if (savedRegistrationId && savedEmail === registerForm.email && !registerForm.registrationId) {
-				setRegisterForm(prev => ({
+			const savedRegistrationId = localStorage.getItem(
+				"pending_registration_id"
+			);
+			const savedEmail = localStorage.getItem("pending_registration_email");
+
+			if (
+				savedRegistrationId &&
+				savedEmail === registerForm.email &&
+				!registerForm.registrationId
+			) {
+				setRegisterForm((prev) => ({
 					...prev,
 					registrationId: savedRegistrationId,
 				}));
@@ -196,18 +202,18 @@ function AuthTester({
 				registerForm.email,
 				registerForm.password
 			);
-			
+
 			// Store registrationId from response
 			if (result.registrationId) {
-				setRegisterForm(prev => ({
+				setRegisterForm((prev) => ({
 					...prev,
 					registrationId: result.registrationId,
 				}));
 				// Also store in localStorage for persistence
-				localStorage.setItem('pending_registration_id', result.registrationId);
-				localStorage.setItem('pending_registration_email', registerForm.email);
+				localStorage.setItem("pending_registration_id", result.registrationId);
+				localStorage.setItem("pending_registration_email", registerForm.email);
 			}
-			
+
 			setRegistrationStep("otp");
 			setRemainingAttempts(null);
 			setResendCooldown(0);
@@ -250,13 +256,26 @@ function AuthTester({
 			showStatus("error", "Client not initialized. Please refresh the page.");
 			return;
 		}
+
+		// Get registrationId from state or localStorage
+		const registrationId =
+			registerForm.registrationId ||
+			localStorage.getItem("pending_registration_id");
+
+		if (!registrationId) {
+			showStatus("error", "Registration ID not found. Please register again.");
+			setRegistrationStep("form");
+			return;
+		}
+
 		setLoading(true);
 		try {
 			// Verify OTP and create new verified account
 			const result = await verifyRegistrationOTP(
 				client,
 				registerForm.email,
-				registerForm.otp
+				registerForm.otp,
+				registrationId // Pass registrationId
 			);
 			setSession(result.session);
 			setRegistrationStep("form");
@@ -299,25 +318,31 @@ function AuthTester({
 		}
 	};
 
-
 	const handleResendOTP = async () => {
 		if (!client) {
 			showStatus("error", "Client not initialized. Please refresh the page.");
 			return;
 		}
-		
+
 		// Get registrationId from state or localStorage
-		const registrationId = registerForm.registrationId || localStorage.getItem('pending_registration_id');
-		
+		const registrationId =
+			registerForm.registrationId ||
+			localStorage.getItem("pending_registration_id");
+
 		if (!registrationId) {
 			showStatus("error", "Registration ID not found. Please register again.");
 			setRegistrationStep("form");
 			return;
 		}
-		
+
 		setLoading(true);
 		try {
-			const result = await resendOTP(client, registerForm.email, registrationId, null);
+			const result = await resendOTP(
+				client,
+				registerForm.email,
+				registrationId,
+				null
+			);
 			setRemainingAttempts(null); // Reset attempts on new OTP
 			showStatus("success", result.message || "OTP sent successfully!");
 		} catch (error) {
@@ -357,19 +382,26 @@ function AuthTester({
 
 		setLoading(true);
 		try {
-			const result = await loginWithEmail(client, loginForm.email, loginForm.password);
-			
+			const result = await loginWithEmail(
+				client,
+				loginForm.email,
+				loginForm.password
+			);
+
 			if (result.session) {
 				setSession(result.session);
 				showStatus("success", "Login successful!");
-				
+
 				if (onAuthSuccess) {
 					onAuthSuccess(result.session, result.data);
 				}
 			}
 		} catch (error) {
 			console.error("Email login error:", error);
-			showStatus("error", error.message || "Login failed. Please check your credentials.");
+			showStatus(
+				"error",
+				error.message || "Login failed. Please check your credentials."
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -1084,7 +1116,6 @@ function AuthTester({
 						)}
 					</div>
 				)}
-
 
 				{/* Google Login Tab */}
 				{activeTab === "google" && (
